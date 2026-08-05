@@ -411,7 +411,7 @@ def charger_modeles(self):
        #Vérifie si les modèles ont déjà été enregistrés
         if True (
                 os.path.exists(resource_path(os.path.join('modeles', 'vectoriseur.joblib'))) and
-                os.path.exists(resource_path(os.path.join('modeles', 'modele_basevariante.joblib'))))
+                os.path.exists(resource_path(os.path.join('modeles', 'modele_basevariante.joblib')))) :
             
             self.vectoriseur = joblib.load(f'{USER_MODELES_DIR}/vectoriseur.joblib')
 
@@ -423,7 +423,7 @@ def charger_modeles(self):
         
         # S'ils n'existent pas, créer modèles
         else:
-            from gestion-ml import creer_modeles
+            from gestion_ml import creer_modeles
             creer_modeles()
 
 

@@ -847,8 +847,8 @@ class ClassificateurProduits:
             texte_brut, texte_propre, code_produit, siret, fournisseur, base_variante, aliment, variante,
             conditionnement, packaging, unite_packaging, origine,
             poids_unitaire, poids_min, poids_max, unite_poids, poids_total_kg, labels, allergenes, unite_consommation, tva,
-            confiance_basevariante, a_reviser)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+            confiance_basevariante, methode_prediction, a_reviser)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
                         (produit['texte_brut'], produit['texte_propre'], produit['code_produit'], produit['siret'],
                          produit['fournisseur'],
                          produit['base_variante'], produit['aliment'], produit['variante'],
@@ -859,6 +859,6 @@ class ClassificateurProduits:
                          produit['poids_total_kg'], produit['labels'],
                          produit['allergenes'],
                          produit['unite_consommation'], produit['tva'],
-                         produit['confiance_basevariante'],
+                         produit['confiance_basevariante'], produit['methode_prediction'],
                          produit['a_reviser']))
         return curseur.lastrowid
