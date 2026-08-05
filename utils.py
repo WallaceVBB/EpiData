@@ -40,7 +40,7 @@ BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les 
 USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
 bd_entrainement = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 bd_pt = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
-CHEMIN_BD = bd_pt  # Alias pour compatibilité
+CHEMIN_BD_PT = bd_pt  # Alias pour compatibilité
 
 os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)

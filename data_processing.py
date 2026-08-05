@@ -188,7 +188,7 @@ class ClassificateurProduits:
         self.modele_basevariante = None
         self.vectoriseur_tfidf_cosine = None
         self.donnees_basevariante_cosine = None
-        self.vd = pd.DataFrame()  # DataFrame des variantes de base
+        self.categories = pd.DataFrame()  # DataFrame des catégories (bases, variantes, familles)
         self.fournisseurs = pd.DataFrame()  # DataFrame des fournisseurs
         self.labels = {}  # Dictionnaire des labels
         self.origines = {}  # Dictionnaire des origines
@@ -341,8 +341,8 @@ class ClassificateurProduits:
         vecteur = self.vectoriseur.transform([texte_propre])
         basevariante = self.modele_basevariante.predict(vecteur)[0].lower()
 
-        mask = self.vd['basevariante'].str.lower() == basevariante
-        matching_rows = self.vd[mask]
+        mask = self.categories['basevariante'].str.lower() == basevariante
+        matching_rows = self.categories[mask]
 
         if not matching_rows.empty:
             aliment = matching_rows.iloc[0]['aliment']

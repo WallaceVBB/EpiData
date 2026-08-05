@@ -15,7 +15,7 @@ import sqlite3
 import joblib
 import pandas as pd
 from types import SimpleNamespace
-from utils import console, MODELES_DIR, PARAMETRES_DIR, bd_pt, ressource_path
+from utils import console, MODELES_DIR, PARAMETRES_DIR, CHEMIN_BD_PT, ressource_path
 
 
 class DataService:
@@ -29,7 +29,7 @@ class DataService:
 
         # Connexion à la base de données de produits traités (créera le fichier si nécessaire)
         try:
-            self.conn = sqlite3.connect(bd_pt)
+            self.conn = sqlite3.connect(CHEMIN_BD_PT)
             self.initialiser_bd()
         except Exception as e:
             console.print(f"[red]Erreur: impossible de créer/ouvrir la base de données: {e}")
@@ -119,7 +119,7 @@ class DataService:
         """Initialise ou récupère la connexion locale à la base de données de produits traités."""
         if not hasattr(self.local, 'connexion') or self.local.connexion is None:
             try:
-                self.local.connexion = sqlite3.connect(bd_pt)
+                self.local.connexion = sqlite3.connect(CHEMIN_BD_PT)
                 self.creer_bd_pt(self.local.connexion)
             except Exception as e:
                 console.print(f"[red]Erreur création BD: {e}")
@@ -286,20 +286,20 @@ class DataService:
 ## Acronymes
 # PT = Produits Traités
 
-def data_service():
+def data_service(self):
     """Service de gestion des données, incluant la connexion à la base de données et le chargement des CSV"""
-    self.conn = sqlite3.connect(chemin_bd_pt)
-    self.charger_csvs()
-    self.charger_modeles()
+    self.conn = sqlite3.connect(CHEMIN_BD_PT)
+    charger_csvs(self)
+    charger_modeles(self)
 
 
 def charger_csvs(self):
     # Charge le CSV des fournisseurs (SIRET et noms)
-    csv_fournisseurs = resource_path(os.path.join("parametres", "fournisseurs.csv"))
+    csv_fournisseurs = ressource_path(os.path.join("parametres", "fournisseurs.csv"))
 
 
     # Charge le CSV des labels et de leurs différentes écritures
-    csv_labels = resource_path(os.path.join("parametres", "labels.csv"))
+    csv_labels = ressource_path(os.path.join("parametres", "labels.csv"))
     df = pd.read_csv(csv_labels)
     dictionnaire_labels = {}
     for _, row in df.iterrows():
@@ -313,7 +313,7 @@ def charger_csvs(self):
 
 
     # Charge le CSV des origines
-    csv_origines = resource_path(os.path.join("parametres","origines.csv"))
+    csv_origines = ressource_path(os.path.join("parametres","origines.csv"))
     df = pd.read_csv(csv_origines)
     dictionnaire_origines = {}
     for _, row in df.iterrows():
@@ -326,13 +326,13 @@ def charger_csvs(self):
         return dictionnaire_origines
 
     # Charge le CSV des poids moyens des fruits et légumes
-    csv_poids_moyen_fl = resource_path(os.path.join("parametres", "poids_moyen_fl.csv"))
+    csv_poids_moyen_fl = ressource_path(os.path.join("parametres", "poids_moyen_fl.csv"))
 
     # Charge le CSV des traitements appertisés (ex. boîtes de conserve)
-    csv_traitement_appertises = resource_path(os.path.join("parametres", "traitement_appertises.csv"))
+    csv_traitement_appertises = ressource_path(os.path.join("parametres", "traitement_appertises.csv"))
 
     # Charge le CSV des unités de poids (kg, g, ml...)
-    csv_unites_poids = resource_path(os.path.join("parametres", "unites_poids.csv"))
+    csv_unites_poids = ressource_path(os.path.join("parametres", "unites_poids.csv"))
     df = pd.read_csv(csv_unites_poids)
     dictionnaire_unites_poids = {}
     for _, row in df.iterrows():
@@ -346,14 +346,14 @@ def charger_csvs(self):
     
     
     # Charge les categories avec les bases variantes, bases et variantes
-    csv_categories = resource_path(os.path.join("parametres", "categories.csv"))
-    
+    csv_categories = ressource_path(os.path.join("parametres", "categories.csv"))
+    self.categories = pd.read_csv(csv_categories)
 
 def initialiser_bd(self):
        
         # Fait la connexion avec la base de données de stockage des traitements réalisés
         if not hasattr(self.local, 'connexion'):
-            self.local.connexion = sqlite3.connect(chemin_bd_pt)
+            self.local.connexion = sqlite3.connect(CHEMIN_BD_PT)
             self.creer_bd_pt(self.local.connexion)
             return self.local.connexion
         
@@ -409,9 +409,9 @@ def creer_bd_pt (self, conn):
 def charger_modeles(self):
        
        #Vérifie si les modèles ont déjà été enregistrés
-        if True (
-                os.path.exists(resource_path(os.path.join('modeles', 'vectoriseur.joblib'))) and
-                os.path.exists(resource_path(os.path.join('modeles', 'modele_basevariante.joblib')))) :
+        if (
+                os.path.exists(ressource_path(os.path.join('modeles', 'vectoriseur.joblib'))) and
+                os.path.exists(ressource_path(os.path.join('modeles', 'modele_basevariante.joblib')))) :
             
             self.vectoriseur = joblib.load(f'{USER_MODELES_DIR}/vectoriseur.joblib')
 
@@ -424,6 +424,6 @@ def charger_modeles(self):
         # S'ils n'existent pas, créer modèles
         else:
             from gestion_ml import creer_modeles
-            creer_modeles()
+            creer_modeles(self)
 
 

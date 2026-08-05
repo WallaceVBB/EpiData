@@ -32,7 +32,7 @@ class Application(tk.Tk):
         # Ouvrir le splash screen
         self.splash = SplashScreen(self)
 
-        self.data_service = data_service()
+        self.data_service = data_service(self)
         
         # Charger les données en arrière-plan (Splash Screen)
         thread = threading.Thread(target=self._start_loading)
