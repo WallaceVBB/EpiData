@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>400</width>
+    <height>300</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Form</string>
+  </property>
+  <widget class="QWidget" name="verticalLayoutWidget">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>90</y>
+     <width>189</width>
+     <height>103</height>
+    </rect>
+   </property>
+   <layout class="QVBoxLayout" name="verticalLayout">
+    <item>
+     <widget class="QPushButton" name="b_Recreer_Modeles">
+      <property name="text">
+       <string>Recréer modèles</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="b_Recreer_BD_Entrainement">
+      <property name="text">
+       <string>Recréer BD entraînement</string>
+      </property>
+     </widget>
+    </item>
+    <item>
+     <widget class="QPushButton" name="b_Recreer_BD_PT">
+      <property name="text">
+       <string>Recréer BD produits traités</string>
+      </property>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>

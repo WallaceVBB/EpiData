@@ -1,79 +1,97 @@
-# Fichier qui va controler le cycle de vie de l'application
+# Fichier qui controle le cycle de vie de l'application
 
 ### Bibliothèques
-import tkinter as tk
-from tkinter import ttk
-import threading
-from services import data_service
-#import pages
+import sys
+import os
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtUiTools import QUiLoader
+from PySide6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QMainWindow,
+    QSplashScreen,
+    QVBoxLayout,
+    QWidget,
+)
 
-### Fonctions
+from utils import console, UI_DIR
 
-class SplashScreen(tk.Toplevel):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Ouvrant votre Cantine Numérique...)")
-        self.geometry("400x200")
-        
-        #Status Label (AF: afficher l'étape chargement en cours)
-        self.label_status = ttk.Label(self, text="Chargement en cours...", font=("Arial", 16))
-        self.label_status.pack(expand=True)
-
-        # AF: Ajouter une image et la version de l'application
-
-
-class Application(tk.Tk):
+class Application:
     def __init__(self):
-        super().__init__()
+        # Création de l'application Qt
+        self.app = QApplication(sys.argv)
 
-        # Fermer la fenêtre principale pendant le splash screen
-        self.withdraw()
+        # Chargement de la fenêtre principale
+        self.window = self.load_ui("mainwindow.ui")
 
-        # Ouvrir le splash screen
-        self.splash = SplashScreen(self)
+        # Dictionnaire contenant toutes les pages
+        self.pages = {}
 
-        self.data_service = data_service(self)
-        
-        # Charger les données en arrière-plan (Splash Screen)
-        thread = threading.Thread(target=self._start_loading)
-        thread.start()
+        # Chargement des pages
+        self.load_pages()
 
+        # Configuration de la navigation
+        self.setup_navigation()
 
-    def _start_loading(self):
-        def update_status(message):
-            self.after(0, lambda:self.splash.label_status.config(text=message))
+        # Afficher la page d'accueil au démarrage
+        self.show_page("accueil")
 
-        # Simuler le chargement des données
-        self.data_service.initialiser_dataset(self.splash.label_status)
+    def load_ui(self, filename):
+        # Création du chargeur Qt
+        loader = QUiLoader()
 
-        # Une fois le chargement terminé, afficher la fenêtre principale
-        self.after(0, self._show_main_app)
-    
-    def _show_main_app(self):
-        
-        self.splash.destroy() # Fermer le splash screen
+        # Construction du chemin vers le fichier .ui
+        ui_path = os.path.join(UI_DIR, filename)
 
-        # Configurer la fenêtre principale
-        self.title("Cantine Numérique")
-        self.geometry("800x600")
-        self.deiconify()  # Afficher la fenêtre principale
+        # Chargement de l'interface
+        widget = loader.load(ui_path)
 
-        # Création du container des pages
-        self.container = ttk.Frame(self)
-        self.container.pack(fill="both", expand=True)
+        if widget is None:
+            raise RuntimeError(
+                f"Impossible de charger l'interface : {ui_path}"
+            )
 
-        self.show_frame("PageAccueil")
-        
-    def show_frame(self, page_name):
+        return widget
 
-        if page_name not in self.frames:
-            page_class = getattr(pages, page_name)
-            frame = page_class(parent=self.container, controller=self)
-            self.frames[page_name] = frame
-            frame.grid(row=0, column=0, sticky="nsew")
+    def load_pages(self):
+        # Chargement de chaque page
+        self.pages["accueil"] = self.load_ui("Accueil.ui")
+        self.pages["traitement_produits"] = self.load_ui("Traitement_selecteur.ui")
+        self.pages["convertir_pdf"] = self.load_ui("ConvertisseurPDF_selecteur.ui")
+        self.pages["parametres"] = self.load_ui("Parametres.ui")
 
-        frame = self.frames[page_name]
-        frame.tkraise()
+        # Ajout de chaque page au QStackedWidget
+        for page in self.pages.values():
+            self.window.stackedWidget.addWidget(page)
 
-        if hasattr(frame, "on_show"):
-            frame.on_show()
+    def setup_navigation(self):
+        # Connexion des boutons de navigation
+        self.window.b_Accueil.clicked.connect(
+            lambda: self.show_page("accueil")
+        )
+
+        self.window.b_Traiter_fichier.clicked.connect(
+            lambda: self.show_page("traitement_produits")
+        )
+
+        self.window.b_Convertir_PDF.clicked.connect(
+            lambda: self.show_page("convertir_pdf")
+        )
+
+        self.window.b_Parametres.clicked.connect(
+            lambda: self.show_page("parametres")
+        )
+
+    def show_page(self, page_name):
+        # Récupération de la page demandée
+        page = self.pages[page_name]
+
+        # Affichage de la page
+        self.window.stackedWidget.setCurrentWidget(page)
+
+    def run(self):
+        # Affichage de la fenêtre principale
+        self.window.show()
+
+        # Démarrage de la boucle événementielle Qt
+        sys.exit(self.app.exec())

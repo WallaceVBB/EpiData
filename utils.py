@@ -27,25 +27,26 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 ### Code
 
 #### Déterminer le répertoire utilisateur en fonction de la plateforme
-if platform.system() == "Windows":
-    USER_APP_DIR = os.path.expanduser("~\\AppData\\Local\\Cantine Egalim")
+'''if platform.system() == "Windows":
+    USER_APP_DIR = os.path.expanduser("~\\AppData\\Local\\Cantine-Numerique")
 elif platform.system() == "Darwin":  # macOS
-    USER_APP_DIR = os.path.expanduser("~/Library/Application Support/Cantine Egalim")
+    USER_APP_DIR = os.path.expanduser("~/Library/Application Support/Cantine-Numerique")
 else:  # Linux
-    USER_APP_DIR = os.path.expanduser("~/.local/share/Cantine Egalim")
+    USER_APP_DIR = os.path.expanduser("~/.local/share/Cantine-Numerique")'''
+USER_APP_DIR = os.path.dirname(os.path.abspath(__file__)) # répertoire utilisateur pour stocker les fichiers de l'application
+
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
 PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour les paramètres pour le traitement
-GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
+UI_DIR = os.path.join(USER_APP_DIR, "ui") # sous-dossier pour les fichiers graphiques
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
 bd_entrainement = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
-bd_pt = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
-CHEMIN_BD_PT = bd_pt  # Alias pour compatibilité
+CHEMIN_BD_PT = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
 
 os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)
 os.makedirs(PARAMETRES_DIR, exist_ok=True)
-os.makedirs(GUI_DIR, exist_ok=True)
+os.makedirs(UI_DIR, exist_ok=True)
 os.makedirs(BD_DIR, exist_ok=True)
 os.makedirs(USER_DONNEES_DIR, exist_ok=True)
 
