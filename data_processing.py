@@ -1,9 +1,7 @@
 ## Explication du fichier
 # Ce ficher fait le traitement des données importer (fichier CSV à traiter)
 
-## TODO's:
-# C'est encore pratiquemente comme old_version
-# changer texte_brut par "designation"
+# TODO: Créer methode de traitement simple (seulement traitement ML) et la séparer de la méthode de traitement complet (avec toutes les colonnes)
 
 ## Bibliothèques
 import os

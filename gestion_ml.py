@@ -20,14 +20,14 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.svm import LinearSVC
 from sklearn.metrics.pairwise import cosine_similarity
 from rich.progress import Progress
-from utils import console, MODELES_DIR, PARAMETRES_DIR, bd_entrainement, bd_pt, ressource_path
+from utils import console, MODELES_DIR, PARAMETRES_DIR, BD_ENTRAINEMENT, ressource_path
 
 
 ## Code
     
 def __init__(self, bd_entrainement_path):
     """Initialise la gestion ML"""
-    self.bd_entrainement = bd_entrainement_path
+    self.BD_ENTRAINEMENT = bd_entrainement_path # TODO: Est ce que je peux remplacer par la variable globale BD_ENTRAINEMENT ?
     if not os.path.exists(bd_entrainement_path):
         console.print("[yellow]La base de données d'entrainement est introuvable, création d'une nouvelle base...[/yellow]")
         self.creer_bd_entrainement()

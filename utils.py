@@ -1,19 +1,6 @@
 ### Explications du fichier
 # Ce fichier gère les chemins et répertoires utilisés par l'application.
 
-## TODO's:
-# TODO: il manque encore (essentiel) :
-#   - USER_DATA_DIR, USER_MODELES_DIR, USER_DONNEES_DIR
-#   - CHEMIN_BD, BUNDLE_BD et la copie initiale de la base de données utilisateur
-#   - la logique d'initialisation des fichiers CSV et des modèles dans le répertoire utilisateur
-#   - les fonctions de copie de ressources utilisateur et de vérification des fichiers existants
-# TODO (amèlioration): 
-#   - regrouper la gestion des chemins dans un module de configuration de l'environnement.
-#   - utiliser un vrai dossier utilisateur selon la plateforme, pas un chemin codé en dur.
-
-## Variables
-
-
 ### Bibliothèque
 import os
 import sys
@@ -26,27 +13,34 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 ### Code
 
-#### Déterminer le répertoire utilisateur en fonction de la plateforme
+# Déterminer le répertoire utilisateur en fonction de la plateforme
+# TODO: Enlever les commentaires à la fin du développement pour utiliser le vrai répertoire utilisateur selon la plateforme.
 '''if platform.system() == "Windows":
     USER_APP_DIR = os.path.expanduser("~\\AppData\\Local\\Cantine-Numerique")
 elif platform.system() == "Darwin":  # macOS
     USER_APP_DIR = os.path.expanduser("~/Library/Application Support/Cantine-Numerique")
 else:  # Linux
     USER_APP_DIR = os.path.expanduser("~/.local/share/Cantine-Numerique")'''
+
+# TODO: Utiliser pendant dévéloppement :
 USER_APP_DIR = os.path.dirname(os.path.abspath(__file__)) # répertoire utilisateur pour stocker les fichiers de l'application
 
+# Définir les chemins vers les sous-dossiers et fichiers
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
 PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour les paramètres pour le traitement
-UI_DIR = os.path.join(USER_APP_DIR, "ui") # sous-dossier pour les fichiers graphiques
+GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
+NAVIGATION_DIR = os.path.join(USER_APP_DIR, "navigation") # sous-dossier pour les fichiers python de navigation GUI
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
-bd_entrainement = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
-CHEMIN_BD_PT = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
+BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
+BD_PT = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
 
+# Créer les répertoires nécessaires si ils n'existent pas
 os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)
 os.makedirs(PARAMETRES_DIR, exist_ok=True)
-os.makedirs(UI_DIR, exist_ok=True)
+os.makedirs(GUI_DIR, exist_ok=True)
+os.makedirs(NAVIGATION_DIR, exist_ok=True)
 os.makedirs(BD_DIR, exist_ok=True)
 os.makedirs(USER_DONNEES_DIR, exist_ok=True)
 
@@ -83,9 +77,13 @@ def copier_fichier_ressource_vers_utilisateur ():
     dossier utilisateur lors de la première exécution."""
 
     fichiers_a_copier = [
-        ("bd_entrainement.db", "bases_de_donnees"),
-        ("bd_pt.db", "bases_de_donnees")
-    ]
+        (BD_ENTRAINEMENT, "bases_de_donnees"),
+        (BD_PT, "bases_de_donnees"),
+        ("vectoriseur.joblib", "modeles"),
+        ("modele_basevariante.joblib", "modeles"),
+        ("vectoriseur_tfidf_cosine.joblib", "modeles"),
+        ("donnees_basevariante_cosine.joblib", "modeles"),
+    ] # TODO: ajouter les fichiers CSV et les ui à copier vers le répertoire utilisateur
 
     for nom_fichier, sous_dossier in fichiers_a_copier:
         assurer_fichier_utilisateur(nom_fichier, sous_dossier)
