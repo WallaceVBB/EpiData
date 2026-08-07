@@ -21,6 +21,7 @@ from sklearn.svm import LinearSVC
 from sklearn.metrics.pairwise import cosine_similarity
 from rich.progress import Progress
 from utils import console, MODELES_DIR, PARAMETRES_DIR, BD_ENTRAINEMENT, ressource_path
+from services import creer_bd_entrainement, maj_bd_entrainement
 
 
 ## Code
@@ -30,8 +31,8 @@ def __init__(self, bd_entrainement_path):
     self.BD_ENTRAINEMENT = bd_entrainement_path # TODO: Est ce que je peux remplacer par la variable globale BD_ENTRAINEMENT ?
     if not os.path.exists(bd_entrainement_path):
         console.print("[yellow]La base de données d'entrainement est introuvable, création d'une nouvelle base...[/yellow]")
-        self.creer_bd_entrainement()
-    self.maj_bd_entrainement()
+        self.creer_bd_entrainement(self)
+    maj_bd_entrainement(self)
 
 def recreer_modeles(self):
     """Supprime les modèles existants et crée de nouveaux modèles."""
@@ -55,11 +56,11 @@ def creer_modeles(self):
 
             bd_entrainement_path = ressource_path("bases_de_donnees/bd_entrainement.db")
             if not os.path.exists(bd_entrainement_path):
-                console.print("[red]La base de données d'entrainement est introuvable ![/red]")
-                return
-                
-            chunks = pd.read_csv(bd_entrainement_path, chunksize=1000)
-            donnees = pd.concat(chunks)
+                creer_bd_entrainement(self)
+
+            with sqlite3.connect(bd_entrainement_path) as conn:
+                chunks = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn, chunksize=1000)
+                donnees = pd.concat(chunks, ignore_index=True)
             progression.update(tache_globale, advance=10)
             progression.update(tache_etape, advance=1)
 

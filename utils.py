@@ -34,6 +34,7 @@ BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les 
 USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 BD_PT = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
+CHEMIN_BD = BD_PT  # alias historique utilisé par data_processing
 
 # Créer les répertoires nécessaires si ils n'existent pas
 os.makedirs(USER_APP_DIR, exist_ok=True)

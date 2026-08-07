@@ -1,7 +1,6 @@
 ## Explication du fichier
 # Ce ficher fait le traitement des données importer (fichier CSV à traiter)
 
-# TODO: Créer methode de traitement simple (seulement traitement ML) et la séparer de la méthode de traitement complet (avec toutes les colonnes)
 
 ## Bibliothèques
 import os
@@ -14,8 +13,9 @@ from tkinter import filedialog, messagebox
 import re
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
-from services import DataService
-from utils import CHEMIN_BD, MODELES_DIR
+from utils import CHEMIN_BD, MODELES_DIR, ressource_path
+from gestion_ml import creer_modeles
+from services import creer_bd_pt
 
 
 # Code
@@ -23,6 +23,7 @@ class ImportationDonnees:
     def __init__(self, chemin_bd, controller=None):
         self.chemin_bd = chemin_bd
         self.controller = controller
+        self.last_error = None
         self.classificateur = ClassificateurProduits(controller=controller)
         self.importer_csv_pp()
 
@@ -44,7 +45,7 @@ class ImportationDonnees:
             df = pd.read_csv(file_path)
 
             # Vérifier les colonnes obligatoires
-            colonnes_requises = ['designation', 'categorie']
+            colonnes_requises = ['designation', 'base_variante']
             for col in colonnes_requises:
                 if col not in df.columns:
                     raise ValueError(f"Colonne manquante: {col}")
@@ -110,6 +111,7 @@ class ImportationDonnees:
                 messagebox.showinfo("Succès", "Importation terminée avec succès!")
 
         except Exception as e:
+            self.last_error = e
             if self.controller:
                 self.controller.after(0, lambda: messagebox.showerror("Erreur",
                                                                       f"Erreur lors de l'importation: \n{str(e)}"))
@@ -177,9 +179,10 @@ class ImportationDonnees:
 class ClassificateurProduits:
     """Classe pour classifier et traiter les produits alimentaires."""
     
-    def __init__(self, controller=None):
+    def __init__(self, controller=None, chemin_bd=None):
         """Initialise le classificateur avec tous les attributs nécessaires."""
         self.controller = controller
+        self.chemin_bd = chemin_bd or CHEMIN_BD
         
         # Initialiser les attributs avec des valeurs par défaut
         self.vectoriseur = None
@@ -196,6 +199,7 @@ class ClassificateurProduits:
         
         # Charger les données depuis le service si disponible
         self._charger_donnees_service()
+        self._charger_parametres()
         
         # Migrer la BD si nécessaire
         self._migrer_bd_si_necessaire()
@@ -206,7 +210,7 @@ class ClassificateurProduits:
             # Si on a un contrôleur avec un data_service, charger les données depuis là
             if self.controller and hasattr(self.controller, 'data_service'):
                 data_service = self.controller.data_service
-                
+
                 if hasattr(data_service, 'dictionnaire_labels'):
                     self.labels = data_service.dictionnaire_labels
                 if hasattr(data_service, 'dictionnaire_origines'):
@@ -217,13 +221,34 @@ class ClassificateurProduits:
                     self.vectoriseur = data_service.vectoriseur
                 if hasattr(data_service, 'modele_basevariante'):
                     self.modele_basevariante = data_service.modele_basevariante
+                if hasattr(data_service, 'vectoriseur_tfidf_cosine'):
+                    self.vectoriseur_tfidf_cosine = data_service.vectoriseur_tfidf_cosine
+                if hasattr(data_service, 'donnees_basevariante_cosine'):
+                    self.donnees_basevariante_cosine = data_service.donnees_basevariante_cosine
+                if hasattr(data_service, 'csv_fournisseurs'):
+                    self.fournisseurs = data_service.csv_fournisseurs if data_service.csv_fournisseurs is not None else pd.DataFrame()
+                if hasattr(data_service, 'traitement_appertises'):
+                    self.traitement_appertises = data_service.traitement_appertises
+                if hasattr(data_service, 'poids_moyen_fl'):
+                    self.poids_moyen_fl = data_service.poids_moyen_fl
         except Exception:
             pass  # Si le chargement échoue, utiliser les valeurs par défaut
-    
+
+    def _charger_parametres(self):
+        """Charge les fichiers de paramètres nécessaires au traitement."""
+        try:
+            categories_csv = ressource_path(os.path.join("parametres", "categories.csv"))
+            if os.path.exists(categories_csv):
+                df = pd.read_csv(categories_csv, dtype=str)
+                df.columns = df.columns.str.lower()
+                self.categories = df
+        except Exception as e:
+            print(f"Erreur lors du chargement des paramètres catégories: {e}")
+
     def _migrer_bd_si_necessaire(self):
         """Ajoute la colonne 'methode_prediction' à la table produits si elle n'existe pas."""
         try:
-            with sqlite3.connect(CHEMIN_BD) as conn:
+            with sqlite3.connect(self.chemin_bd) as conn:
                 cursor = conn.cursor()
                 # Vérifier si la table produits existe
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produits'")
@@ -245,23 +270,30 @@ class ClassificateurProduits:
             # Charger les modèles de la première méthode (LinearSVC)
             vectoriseur_path = os.path.join(MODELES_DIR, 'vectoriseur.joblib')
             modele_path = os.path.join(MODELES_DIR, 'modele_basevariante.joblib')
-            
+
             if os.path.exists(vectoriseur_path) and os.path.exists(modele_path):
                 self.vectoriseur = joblib.load(vectoriseur_path)
                 self.modele_basevariante = joblib.load(modele_path)
-            
+            else:
+                self.vectoriseur = None
+                self.modele_basevariante = None
+
             # Charger les modèles de la deuxième méthode (TF-IDF Cosine)
             vectoriseur_cosine_path = os.path.join(MODELES_DIR, 'vectoriseur_tfidf_cosine.joblib')
             donnees_cosine_path = os.path.join(MODELES_DIR, 'donnees_basevariante_cosine.joblib')
-            
-            self.vectoriseur_tfidf_cosine = None
-            self.donnees_basevariante_cosine = None
-            
+
             if os.path.exists(vectoriseur_cosine_path) and os.path.exists(donnees_cosine_path):
                 self.vectoriseur_tfidf_cosine = joblib.load(vectoriseur_cosine_path)
                 self.donnees_basevariante_cosine = joblib.load(donnees_cosine_path)
+            else:
+                self.vectoriseur_tfidf_cosine = None
+                self.donnees_basevariante_cosine = None
         except Exception as e:
             print(f"Erreur lors du chargement des modèles: {e}")
+            self.vectoriseur = None
+            self.modele_basevariante = None
+            self.vectoriseur_tfidf_cosine = None
+            self.donnees_basevariante_cosine = None
     
     def predire_avec_methode_cosine(self, texte):
         """
@@ -337,9 +369,10 @@ class ClassificateurProduits:
     def attribuer_aliment_et_variante(self, texte):
         texte_propre = self.nettoyer_texte(texte)
         vecteur = self.vectoriseur.transform([texte_propre])
+        # TODO : utiliser la méthode hybride pour determiner la basevariante, et ensuite attribuer aliment et variante
         basevariante = self.modele_basevariante.predict(vecteur)[0].lower()
 
-        mask = self.categories['basevariante'].str.lower() == basevariante
+        mask = self.categories['basevariante'].astype(str).str.lower() == basevariante
         matching_rows = self.categories[mask]
 
         if not matching_rows.empty:
@@ -638,8 +671,35 @@ class ClassificateurProduits:
     def classifier_produits(self, fichier_entree, progress_callback=None):
         """Classifie les produits à partir d'un fichier CSV avec colonnes: designation (obligatoire), code_produit (optionnel), siret (optionnel)"""
         self.charger_modeles()
+
+        if self.vectoriseur is None or self.modele_basevariante is None:
+            vectoriseur_path = os.path.join(MODELES_DIR, 'vectoriseur.joblib')
+            modele_path = os.path.join(MODELES_DIR, 'modele_basevariante.joblib')
+
+            if os.path.exists(vectoriseur_path) and os.path.exists(modele_path):
+                raise RuntimeError(
+                    "Les fichiers de modèles existent mais n'ont pas pu être chargés. "
+                    "Supprimez-les et relancez le traitement pour tenter une reconstruction."
+                )
+
+            try:
+                creer_modeles(self)
+                self.charger_modeles()
+            except Exception as e:
+                raise RuntimeError(
+                    "Impossible de créer les modèles de classification. "
+                    f"Vérifiez les fichiers dans le dossier 'modeles'. Détail: {e}"
+                ) from e
+
+            if self.vectoriseur is None or self.modele_basevariante is None:
+                raise RuntimeError(
+                    "Les modèles n'ont pas été créés correctement. "
+                    "Vérifiez l'état du dossier 'modeles'."
+                )
+
         try:
-            with sqlite3.connect(CHEMIN_BD) as conn:
+            with sqlite3.connect(self.chemin_bd) as conn:
+                creer_bd_pt(self, conn) # Créer la base de connaissance si elle n'existe pas
                 cursor = conn.cursor()
                 resultats = []  # Liste pour stocker les résultats
 
@@ -798,7 +858,7 @@ class ClassificateurProduits:
         except Exception as e:
             if progress_callback:
                 progress_callback(100, f"Erreur: {str(e)}")
-            return None
+            raise
 
     def extraire_caracteristiques(self, texte, siret=None):
         """Extrait toutes les caractéristiques du produit"""

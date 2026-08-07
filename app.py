@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from navigation.n_traitement import TraitementNavigation
+from services import DataService
 from utils import console, GUI_DIR, NAVIGATION_DIR
 
 class Application:
@@ -28,6 +30,17 @@ class Application:
 
         # Chargement des pages
         self.load_pages()
+
+        # Initialisation des services globaux
+        self.data_service = DataService(app=self)
+
+        # Configuration des traitements
+        self.traitement_navigation = TraitementNavigation(
+            self.pages["traitement_produits"],
+            self.show_page,
+            self.pages,
+            data_service=self.data_service,
+        )
 
         # Configuration de la navigation
         self.setup_navigation()
@@ -56,6 +69,8 @@ class Application:
         # Chargement de chaque page
         self.pages["accueil"] = self.load_gui("Accueil.ui")
         self.pages["traitement_produits"] = self.load_gui("Traitement_selecteur.ui")
+        self.pages["traitement_chargement"] = self.load_gui("Traitement_chargement.ui")
+        self.pages["traitement_resultats"] = self.load_gui("Traitement_resultats.ui")
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
