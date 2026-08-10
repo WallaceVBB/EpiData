@@ -410,16 +410,3 @@ def extraire_facture_pdf(chemin_pdf, chemin_sortie_excel="facture_extraite.xlsx"
     )
 
     return df_final
-
-'''
-# TODO: remplacer le declancheur par un bouton dans la GUI de l'extrateur de pdf
-# TODO : remplacer par un selecteur de fichier pour choisir le PDF à traiter, le téléchargement du et le choix du nom du fichier Excel de sortie sera fait à la fin du traitement
-if __name__ == "__main__":
-    import sys
-
-    if len(sys.argv) < 2:
-        raise SystemExit("Usage: python 'Extracteur Generique.py' <chemin_du_pdf> [chemin_sortie_excel]")
-
-    chemin_pdf = sys.argv[1]
-    chemin_sortie = sys.argv[2] if len(sys.argv) > 2 else "facture_extraite.xlsx"
-    extraire_facture_pdf(chemin_pdf, chemin_sortie)'''
