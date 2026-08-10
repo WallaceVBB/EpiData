@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from navigation.n_traitement import TraitementNavigation
+from navigation.n_extracteur_factures import FactureNavigation
 from services import DataService
 from utils import console, GUI_DIR, NAVIGATION_DIR
 
@@ -31,15 +32,16 @@ class Application:
         # Chargement des pages
         self.load_pages()
 
-        # Initialisation des services globaux
-        self.data_service = DataService(app=self)
-
         # Configuration des traitements
         self.traitement_navigation = TraitementNavigation(
             self.pages["traitement_produits"],
             self.show_page,
-            self.pages,
-            data_service=self.data_service,
+            self.pages
+        )
+        self.facture_navigation = FactureNavigation(
+            self.pages["convertir_pdf"],
+            self.show_page,
+            self.pages
         )
 
         # Configuration de la navigation
@@ -72,6 +74,8 @@ class Application:
         self.pages["traitement_chargement"] = self.load_gui("Traitement_chargement.ui")
         self.pages["traitement_resultats"] = self.load_gui("Traitement_resultats.ui")
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
+        self.pages["convertisseur_pdf_chargement"] = self.load_gui("ConvetisseurPDF_chargement.ui")
+        self.pages["convertisseur_pdf_resultats"] = self.load_gui("Convertisseur_PDF_resultats.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
         # Ajout de chaque page au QStackedWidget

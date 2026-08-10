@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QFileDialog, QMessageBox, QHeaderView
 
 import data_processing as dp
 from data_processing import ClassificateurProduits
+from services import DataService
 from utils import BD_PT, console
 
 
@@ -27,6 +28,7 @@ class QtController:
 
 class TraitementWorker(QThread):
     finished = Signal(bool, str, object)
+    progress_updated = Signal(int, str)
 
     def __init__(self, file_path, chemin_bd, data_service=None, parent=None):
         super().__init__(parent)
@@ -48,15 +50,21 @@ class TraitementWorker(QThread):
             result['success'] = False
             result['message'] = message
 
+        def progress_callback(progress, message):
+            self.progress_updated.emit(int(progress), message)
+
         dp.messagebox.showinfo = showinfo
         dp.messagebox.showerror = showerror
 
         try:
+            # Initialisation des services globaux
+            self.data_service = DataService(app=self)
             classifier = ClassificateurProduits(
                 controller=QtController(data_service=self.data_service),
                 chemin_bd=self.chemin_bd
             )
-            imported_df = classifier.classifier_produits(self.file_path, progress_callback=None)
+            self.progress_updated.emit(5, "Création des modèles...")
+            imported_df = classifier.classifier_produits(self.file_path, progress_callback=progress_callback)
             if imported_df is None:
                 raise RuntimeError("Le traitement du fichier a échoué")
             imported_rows = imported_df
@@ -64,6 +72,7 @@ class TraitementWorker(QThread):
             console.print(f"[red]Erreur lors du traitement du fichier : {exc}")
             result['success'] = False
             result['message'] = str(exc)
+            self.progress_updated.emit(100, f"Erreur: {str(exc)}")
         finally:
             dp.messagebox.showinfo = original_showinfo
             dp.messagebox.showerror = original_showerror
@@ -82,6 +91,9 @@ class TraitementNavigation:
         self.worker = None
         self._progress_timer = None
         self.current_results_df = None
+        self._current_stage = 'creation_modeles'
+        self._last_progress_value = 0
+        self._last_progress_message = ''
         self._connect_buttons()
         self._connect_progress_buttons()
         self._connect_results_buttons()
@@ -120,10 +132,14 @@ class TraitementNavigation:
             return
 
         self.current_results_df = None
+        self._current_stage = 'creation_modeles'
+        self._last_progress_value = 0
+        self._last_progress_message = ''
         self._show_loading_page()
 
         self.worker = TraitementWorker(file_path, BD_PT, data_service=self.data_service)
         self.worker.finished.connect(self.on_finished)
+        self.worker.progress_updated.connect(self.on_progress_update)
         self.worker.start()
 
     def on_traitement_simplifie(self):
@@ -160,7 +176,6 @@ class TraitementNavigation:
         QMessageBox.information(self.page, "Traitement terminé", message)
 
     def _show_loading_page(self):
-        # TODO: faire que la barre de progression soit aussi pour la création des modèles de marchine learning, et pas seulement pour le traitement du fichier CSV.
         loading_page = self.pages.get('traitement_chargement')
         if not loading_page:
             return
@@ -175,17 +190,26 @@ class TraitementNavigation:
         self._progress_timer.timeout.connect(self._animate_progress)
         self._progress_timer.start()
 
+    def on_progress_update(self, value, message):
+        self._last_progress_value = max(0, min(100, int(value)))
+        self._last_progress_message = message or ''
+        self._current_stage = 'creation_modeles' if 'modèle' in self._last_progress_message.lower() else 'traitement_produits'
+        self._update_loading_progress(self._last_progress_value)
+        self._update_loading_label(self._last_progress_value)
+
     def _animate_progress(self):
-        # TODO: remplacer cette animation par une mise à jour réelle de la progression, qui prendra en compte le nombre de lignes traitées par rapport au nombre total de lignes dans le fichier CSV.
         loading_page = self.pages.get('traitement_chargement')
         if not loading_page or not hasattr(loading_page, 'progressBar_Traitement'):
             return
 
         value = loading_page.progressBar_Traitement.value()
-        if value < 90:
-            value = min(90, value + 5)
-        elif value < 99:
-            value += 1
+        if self._current_stage == 'creation_modeles':
+            value = min(20, value + 2)
+        elif self._last_progress_value > 0:
+            value = max(value, self._last_progress_value)
+        elif value < 90:
+            value = min(90, value + 1)
+
         loading_page.progressBar_Traitement.setValue(value)
         self._update_loading_label(value)
 
@@ -196,8 +220,17 @@ class TraitementNavigation:
 
     def _update_loading_label(self, value):
         loading_page = self.pages.get('traitement_chargement')
-        if loading_page and hasattr(loading_page, 'label_3'):
-            loading_page.label_3.setText(f"Progression: {value}%")
+        if not loading_page or not hasattr(loading_page, 'label_3'):
+            return
+
+        if self._current_stage == 'creation_modeles':
+            label_text = f"Création des modèles : {value}%"
+        elif value >= 100:
+            label_text = "Traitement terminé"
+        else:
+            label_text = f"Traitement de produits : {value}%" # TODO: remplacer par : XX / XX (produits traités / produits totaux)
+
+        loading_page.label_3.setText(label_text)
 
     def _show_results_page(self):
         results_page = self.pages.get('traitement_resultats')
