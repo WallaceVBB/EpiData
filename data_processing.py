@@ -330,8 +330,8 @@ class ClassificateurProduits:
         1. Essaye la méthode 2 (TF-IDF Cosine) - plus légère et rapide
         2. Si accuracy >= 95%, l'utiliser directement
         3. Si accuracy < 95%, essaye la méthode 1 (LinearSVC)
-        4. Si accuracy M1 >= 80%, l'utiliser
-        5. Si accuracy M1 < 80%, comparer et retourner le meilleur
+        4. Si accuracy M1 >= 70%, l'utiliser
+        5. Si accuracy M1 < 70%, comparer et retourner le meilleur
         
         Retourne: (prediction, score_confiance, methode_utilisee)
         """
@@ -349,11 +349,11 @@ class ClassificateurProduits:
         pred_method1 = self.modele_basevariante.predict(vecteur)[0]
         proba_method1 = np.max(self.modele_basevariante.predict_proba(vecteur))
         
-        # Étape 4: Si M1 >= 80%, l'utiliser directement
-        if proba_method1 >= 0.80:
+        # Étape 4: Si M1 >= 70%, l'utiliser directement
+        if proba_method1 >= 0.70:
             return pred_method1, proba_method1, "LinearSVC"
         
-        # Étape 5: Si M1 < 80%, comparer les deux et prendre le meilleur
+        # Étape 5: Si M1 < 70%, comparer les deux et prendre le meilleur
         if proba_method2 > proba_method1:
             return pred_method2, proba_method2, "TF-IDF_Cosine"
         else:
@@ -367,10 +367,9 @@ class ClassificateurProduits:
         return texte
 
     def attribuer_aliment_et_variante(self, texte):
-        texte_propre = self.nettoyer_texte(texte)
-        vecteur = self.vectoriseur.transform([texte_propre])
         # TODO : utiliser la méthode hybride pour determiner la basevariante, et ensuite attribuer aliment et variante
-        basevariante = self.modele_basevariante.predict(vecteur)[0].lower()
+        basevariante, score_confiance, methode = self.predire_avec_methode_hybride(texte)
+        basevariante = basevariante.lower()
 
         mask = self.categories['basevariante'].astype(str).str.lower() == basevariante
         matching_rows = self.categories[mask]
@@ -795,8 +794,8 @@ class ClassificateurProduits:
                         # Caractéristiques supplémentaires
                         caracteristiques = self.extraire_caracteristiques(texte_brut, siret)
 
-                        # Ajuste base_variante, aliment, variante si confiance < 15
-                        if proba_basevariante < 0.15:
+                        # Ajuste base_variante, aliment, variante si confiance < 25
+                        if proba_basevariante < 0.25:
                             base_variante = "Produit non trouvé"
                             aliment = "Produit non trouvé"
                             variante = None
