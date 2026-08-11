@@ -1,37 +1,122 @@
-# Cantine-Numerique
+# EpiData
 
-## Description
-Ce projet est un logiciel de traitement de données d’achats alimentaires destiné aux cantines collectives.
+**EpiData** est un logiciel open-source de traitement et d’analyse des données d’achats alimentaires.
 
-À partir de bases de données fournisseurs, il réalise des prédictions concernant le type de produit, la gamme, le poids, l’origine ainsi que les labels relevant de la loi EGalim.
+Il est conçu pour les structures qui réalisent des achats alimentaires, notamment :
 
-Son objectif est d’assister les cantines dans la réalisation de leurs déclarations sur la plateforme *Ma Cantine* et dans le suivi de leurs diagnostics internes en matière de durabilité des achats alimentaires.
+* 🏫 **Établissements publics** : cantines scolaires, EHPAD, établissements pénitentiaires, etc.
+* 🤝 **Structures associatives** : épiceries sociales et solidaires, associations, etc.
+* 🏪 **Structures privées** : épiceries, petits restaurants, commerces alimentaires, etc.
 
-Le projet est actuellement en **phase de refonte complète**, à la suite d’un développement antérieur réalisé dans le cadre d’un stage.  
-Cette nouvelle version est développée comme un **projet personnel open-source**, avec une architecture repensée et l’utilisation exclusive de données publiques. 
-Un logiciel complémentaire est en train d'être développé afin de collecter et structurer ces données : https://github.com/WallaceVBB/Designation-Fournisseur-Tracker
+L'objectif est de faciliter la **structuration, l'enrichissement et l'analyse des données d'achats alimentaires**, afin de réduire le travail manuel nécessaire au suivi des achats et aux démarches de reporting.
 
+## Fonctionnalités
 
-## Objectifs
-- Fournir un outil open-source pour analyser des achats publics.
-- Explorer des méthodes de machine learning adaptées aux données des cantines.
-- Créer une architecture modulaire et réutilisable.
+EpiData propose actuellement deux fonctionnalités principales.
 
-## Statut
-⚠️ Le projet est en cours de développement.  
-Le code actuel est **une base initiale** et peut changer significativement dans les prochaines versions.
+### 🔎 Classification et enrichissement des produits
 
-## Données
-- Les données utilisées sont exclusivement **publiques ou simulées**.
-- Aucun donnée de l’entreprise précédente n’est incluse.
+À partir de la **désignation d'un produit**, le logiciel utilise des modèles de traitement automatique des données pour prédire différentes informations, notamment :
 
-## Fonctionnalités prévues
-- Chargement et traitement de datasets publics.
-- Modèles de machine learning simples pour classification ou prédiction.
-- Interface graphique.
+* type de produit ;
+* gamme ;
+* poids ;
+* origine ;
+* labels et signes de qualité.
 
-## Contribution
-Ce projet est ouvert à contributions. N’hésitez pas à proposer des idées, rapports de bugs, ou améliorations via les issues ou pull requests.
+Ces informations permettent ensuite de faciliter l'analyse des achats alimentaires et leur catégorisation.
 
-## Licence
-MIT (2025).
+### 📄 Conversion de factures PDF
+
+EpiData permet de convertir des **factures au format PDF en tableaux Excel structurés**.
+
+Le traitement vise notamment à :
+
+* extraire les lignes correspondant aux produits achetés ;
+* éliminer les informations ne concernant pas directement les produits ;
+* structurer les données dans un format exploitable pour une analyse ultérieure.
+
+L'objectif est de transformer des factures peu structurées en données directement utilisables dans un tableur ou dans un outil d'analyse.
+
+## 🎯 Objectifs
+
+EpiData a pour objectif de fournir un outil **libre, open-source et accessible** permettant aux structures réalisant des achats alimentaires de :
+
+* structurer automatiquement leurs données d'achats ;
+* réduire le temps consacré à la saisie et au nettoyage des données ;
+* analyser la composition de leurs achats ;
+* suivre l'évolution de leurs pratiques d'approvisionnement ;
+* faciliter la réalisation de diagnostics sur la durabilité des achats alimentaires ;
+* contribuer à la préparation des déclarations sur la plateforme *Ma Cantine*.
+
+À terme, le projet vise à devenir un outil générique pouvant être utilisé par différents types de structures et avec différents fournisseurs.
+
+## 🚧 Statut
+
+⚠️ **Projet en cours de développement**
+
+Les fonctionnalités actuelles sont fonctionnelles mais le logiciel est encore en phase de développement. Certaines fonctionnalités, notamment la classification automatique des produits et la prise en charge de nouvelles sources de données, sont susceptibles d'évoluer.
+
+## 📊 Données
+
+Les modèles et fonctionnalités d'EpiData s'appuient notamment sur plusieurs sources de données.
+
+### Données issues des fournisseurs
+
+Deux bases de données ont été constituées à partir de projets développés pour collecter et suivre les désignations de produits provenant de sites de fournisseurs :
+
+* [Supermarche-Prix-Scraper](https://github.com/WallaceVBB/Supermarche-Prix-Scraper?utm_source=chatgpt.com)
+* [Designation-Fournisseur-Tracker](https://github.com/WallaceVBB/Designation-Fournisseur-Tracker?utm_source=chatgpt.com)
+
+### Open Food Facts
+
+Une troisième source de données provient du projet **Open Food Facts**, une base de données collaborative et ouverte sur les produits alimentaires.
+
+Les données utilisées dans EpiData peuvent être amenées à évoluer au fur et à mesure du développement du projet.
+
+## 🛠️ Technologies
+
+Le projet est principalement développé en **Python**.
+
+Les différentes fonctionnalités s'appuient notamment sur des outils de :
+
+* traitement et analyse de données ;
+* machine learning et classification automatique ;
+* extraction de données depuis des documents ;
+* traitement de fichiers Excel et PDF.
+
+*Cette section pourra être détaillée davantage au fur et à mesure que l'architecture du projet se stabilise.*
+
+## 🤝 Contribution
+
+EpiData est un projet **open-source** et les contributions sont les bienvenues.
+
+Vous pouvez contribuer de différentes manières :
+
+* signaler un bug ;
+* proposer une nouvelle fonctionnalité ;
+* suggérer une amélioration ;
+* contribuer au code ;
+* améliorer la documentation ;
+* proposer de nouvelles sources de données.
+
+Pour contribuer, vous pouvez ouvrir une **Issue** ou proposer une **Pull Request** sur GitHub.
+
+## 📌 Feuille de route
+
+Les prochaines évolutions envisagées comprennent notamment :
+
+* [ ] améliorer la classification automatique des produits ;
+* [ ] améliorer l'extraction automatique des factures ;
+* [ ] faciliter la vérification et la correction des prédictions ;
+* [ ] développer davantage les fonctionnalités d'analyse des achats ;
+* [ ] améliorer l'interface utilisateur ;
+* [ ] simplifier l'installation et la distribution du logiciel.
+
+Cette feuille de route est susceptible d'évoluer en fonction des besoins des utilisateurs et des contributions au projet.
+
+## 📄 Licence
+
+Ce projet est distribué sous licence **MIT**.
+
+Copyright © 2025 Wallace Bastos
