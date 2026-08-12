@@ -1,7 +1,6 @@
 ## Explication du fichier
 # Ce ficher fait le traitement des données importer (fichier CSV à traiter)
 
-#TODO : Fix bug : quand le logiciel traite un produit produit qui a déjà été traité avant, il est en train de sauter une colonne (donc quelques colonnes de la fin de la base se décalent vers la gauche)
 ## Bibliothèques
 import os
 import sqlite3
@@ -19,8 +18,10 @@ from services import creer_bd_pt
 
 
 # Code
+#TODO: bouger une partie de ce code pour n_revision.py quand ça sera prêt
 class ImportationDonnees:
-    def __init__(self, chemin_bd, controller=None):
+    # Cette classe pour gérer l'importation et le traitement des données de produits propres (designation, base_variante) pour l'entraînement des modèles depuis un fichier CSV.
+    def __init__(self, chemin_bd, controller=None):        
         self.chemin_bd = chemin_bd
         self.controller = controller
         self.last_error = None
@@ -29,6 +30,7 @@ class ImportationDonnees:
 
     def importer_csv_pp(self):
         """Ouvre une boîte de dialogue pour choisir un fichier CSV et lance le traitement en thread."""
+        # TODO: Ajouter possibilité de choisir un fichier Excel ou CSV
         file_path = filedialog.askopenfilename(filetypes=[("Fichiers CSV", "*.csv")])
         if file_path:
             file_path = os.path.normpath(file_path)
@@ -119,6 +121,7 @@ class ImportationDonnees:
                 messagebox.showerror("Erreur", f"Erreur lors de l'importation: \n{str(e)}")
 
     def importer_pp_bd(self, df):
+        # TODO : il faut que la colonne a_reviser soit "false" et que la colonne est_corrige soit "true"
         """Insère le DataFrame dans la base de données SQLite."""
         conn = sqlite3.connect(self.chemin_bd)
         try:
