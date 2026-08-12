@@ -1,4 +1,4 @@
-## 9. Product Processing Workflow
+## Product Processing Workflow
 
 The Product Processing workflow is the core EpiData pipeline.
 
