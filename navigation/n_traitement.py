@@ -30,10 +30,10 @@ class TraitementWorker(QThread):
     finished = Signal(bool, str, object)
     progress_updated = Signal(int, str)
 
-    def __init__(self, file_path, chemin_bd, data_service=None, parent=None):
+    def __init__(self, file_path, bd_pt, data_service=None, parent=None):
         super().__init__(parent)
         self.file_path = file_path
-        self.chemin_bd = chemin_bd
+        self.bd_pt = bd_pt
         self.data_service = data_service
 
     def run(self):
@@ -61,7 +61,7 @@ class TraitementWorker(QThread):
             self.data_service = DataService(app=self)
             classifier = ClassificateurProduits(
                 controller=QtController(data_service=self.data_service),
-                chemin_bd=self.chemin_bd
+                bd_pt=self.bd_pt
             )
             self.progress_updated.emit(5, "Création des modèles...")
             imported_df = classifier.classifier_produits(self.file_path, progress_callback=progress_callback)

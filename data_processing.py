@@ -12,7 +12,7 @@ from tkinter import filedialog, messagebox
 import re
 import joblib
 from sklearn.metrics.pairwise import cosine_similarity
-from utils import CHEMIN_BD, MODELES_DIR, ressource_path
+from utils import BD_PT, MODELES_DIR, ressource_path
 from gestion_ml import creer_modeles
 from services import creer_bd_pt
 
@@ -21,8 +21,8 @@ from services import creer_bd_pt
 #TODO: bouger une partie de ce code pour n_revision.py quand ça sera prêt
 class ImportationDonnees:
     # Cette classe pour gérer l'importation et le traitement des données de produits propres (designation, base_variante) pour l'entraînement des modèles depuis un fichier CSV.
-    def __init__(self, chemin_bd, controller=None):        
-        self.chemin_bd = chemin_bd
+    def __init__(self, bd_pt, controller=None):        
+        self.bd_pt = bd_pt
         self.controller = controller
         self.last_error = None
         self.classificateur = ClassificateurProduits(controller=controller)
@@ -124,7 +124,7 @@ class ImportationDonnees:
     def importer_pp_bd(self, df):
         # TODO : il faut que la colonne a_reviser soit "false" et que la colonne est_corrige soit "true"
         """Insère le DataFrame dans la base de données SQLite."""
-        conn = sqlite3.connect(self.chemin_bd)
+        conn = sqlite3.connect(self.bd_pt)
         try:
             cursor = conn.cursor()
             # --- VERIFIER SCHEMA AVANT ---
@@ -183,10 +183,10 @@ class ImportationDonnees:
 class ClassificateurProduits:
     """Classe pour classifier et traiter les produits alimentaires."""
     
-    def __init__(self, controller=None, chemin_bd=None):
+    def __init__(self, controller=None, bd_pt=None):
         """Initialise le classificateur avec tous les attributs nécessaires."""
         self.controller = controller
-        self.chemin_bd = chemin_bd or CHEMIN_BD
+        self.bd_pt = bd_pt or BD_PT
         
         # Initialiser les attributs avec des valeurs par défaut
         self.vectoriseur = None
@@ -252,7 +252,7 @@ class ClassificateurProduits:
     def _migrer_bd_si_necessaire(self):
         """Ajoute la colonne 'methode_prediction' à la table produits si elle n'existe pas."""
         try:
-            with sqlite3.connect(self.chemin_bd) as conn:
+            with sqlite3.connect(self.bd_pt) as conn:
                 cursor = conn.cursor()
                 # Vérifier si la table produits existe
                 cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produits'")
@@ -701,7 +701,7 @@ class ClassificateurProduits:
                 )
 
         try:
-            with sqlite3.connect(self.chemin_bd) as conn:
+            with sqlite3.connect(self.bd_pt) as conn:
                 conn.row_factory = sqlite3.Row
                 creer_bd_pt(self, conn) # Créer la base de connaissance si elle n'existe pas
                 cursor = conn.cursor()
