@@ -42,6 +42,7 @@ class ImportationDonnees:
 
     def traiter_fichier_pp(self, file_path):
         """Traite le fichier CSV de produits propres et l'importe dans la base de données."""
+        #TODO: Remplacer les fonctions par le traitement de la class ClassificateurProduits
         try:
             # Lire le fichier CSV
             df = pd.read_csv(file_path)

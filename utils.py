@@ -40,8 +40,6 @@ CHEMIN_BD = BD_PT  # alias historique utilisé par data_processing
 os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)
 os.makedirs(PARAMETRES_DIR, exist_ok=True)
-os.makedirs(GUI_DIR, exist_ok=True)
-os.makedirs(NAVIGATION_DIR, exist_ok=True)
 os.makedirs(BD_DIR, exist_ok=True)
 os.makedirs(USER_DONNEES_DIR, exist_ok=True)
 
@@ -78,12 +76,14 @@ def copier_fichier_ressource_vers_utilisateur ():
     dossier utilisateur lors de la première exécution."""
 
     fichiers_a_copier = [
-        (BD_ENTRAINEMENT, "bases_de_donnees"),
-        (BD_PT, "bases_de_donnees"),
-        ("vectoriseur.joblib", "modeles"),
-        ("modele_basevariante.joblib", "modeles"),
-        ("vectoriseur_tfidf_cosine.joblib", "modeles"),
-        ("donnees_basevariante_cosine.joblib", "modeles"),
+        ("pt_base.csv", "donnees"),
+        ("categories.csv", "donnees"),
+        ("produits.csv", "donnees"),
+        ("fournisseurs.csv", "donnees"),
+        ("origines.csv", "donnees"),
+        ("poids_moyen_fl.csv", "donnees"),
+        ("traitement_appertises.csv", "donnees"),
+        ("unites_poids.csv", "donnees"),
     ] # TODO: ajouter les fichiers CSV et les ui à copier vers le répertoire utilisateur
 
     for nom_fichier, sous_dossier in fichiers_a_copier:
