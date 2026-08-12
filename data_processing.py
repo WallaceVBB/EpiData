@@ -1,7 +1,7 @@
 ## Explication du fichier
 # Ce ficher fait le traitement des données importer (fichier CSV à traiter)
 
-
+#TODO : Fix bug : quand le logiciel traite un produit produit qui a déjà été traité avant, il est en train de sauter une colonne (donc quelques colonnes de la fin de la base se décalent vers la gauche)
 ## Bibliothèques
 import os
 import sqlite3
@@ -698,6 +698,7 @@ class ClassificateurProduits:
 
         try:
             with sqlite3.connect(self.chemin_bd) as conn:
+                conn.row_factory = sqlite3.Row
                 creer_bd_pt(self, conn) # Créer la base de connaissance si elle n'existe pas
                 cursor = conn.cursor()
                 resultats = []  # Liste pour stocker les résultats
@@ -753,32 +754,32 @@ class ClassificateurProduits:
 
                     if row:  # si produit trouvé dans la base
                         resultat.update({
-                            'id': row[0],
+                            'id': row['id'],
                             'texte_brut': texte_brut,
-                            'texte_propre': row[2],
-                            'code_produit': row[3],
-                            'siret': row[4],
-                            'fournisseur': row[5],
-                            'base_variante': row[6],
-                            'aliment': row[7],
-                            'variante': row[8],
-                            'conditionnement': row[10],
-                            'packaging': row[11],
-                            'unite_packaging': row[12],
-                            'origine': row[13],
-                            'poids_unitaire': row[14],
-                            'poids_min': row[15],
-                            'poids_max': row[16],
-                            'unite_poids': row[17],
-                            'poids_total_kg': row[18],
-                            'labels': row[19],
-                            'allergenes': row[20],
-                            'unite_consommation': row[22],
-                            'tva': row[23],
-                            'confiance_basevariante': row[24],
-                            'methode_prediction': row[25] if len(row) > 25 else 'Non défini',
-                            'a_reviser': bool(row[27] if len(row) > 27 else False),
-                            'est_corrige': bool(row[28] if len(row) > 28 else False)
+                            'texte_propre': row['texte_propre'],
+                            'code_produit': row['code_produit'],
+                            'siret': row['siret'],
+                            'fournisseur': row['fournisseur'],
+                            'base_variante': row['base_variante'],
+                            'aliment': row['aliment'],
+                            'variante': row['variante'],
+                            'conditionnement': row['conditionnement'],
+                            'packaging': row['packaging'],
+                            'unite_packaging': row['unite_packaging'],
+                            'origine': row['origine'],
+                            'poids_unitaire': row['poids_unitaire'],
+                            'poids_min': row['poids_min'],
+                            'poids_max': row['poids_max'],
+                            'unite_poids': row['unite_poids'],
+                            'poids_total_kg': row['poids_total_kg'],
+                            'labels': row['labels'],
+                            'allergenes': row['allergenes'],
+                            'unite_consommation': row['unite_consommation'],
+                            'tva': row['tva'],
+                            'confiance_basevariante': row['confiance_basevariante'],
+                            'methode_prediction': row['methode_prediction'] if 'methode_prediction' in row.keys() else 'Non défini',
+                            'a_reviser': bool(row['a_reviser']) if 'a_reviser' in row.keys() else False,
+                            'est_corrige': bool(row['est_corrige']) if 'est_corrige' in row.keys() else False
                         })
 
                     else:  # produit pas encore présent dans la base_connaissance

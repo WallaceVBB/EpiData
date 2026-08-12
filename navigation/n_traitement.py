@@ -122,6 +122,7 @@ class TraitementNavigation:
                 results_page.b_Autre_Fichier.clicked.connect(self.on_autre_fichier)
 
     def on_traitement_complet(self):
+        # TODO : accepter CSV ou Excel, et détecter automatiquement le séparateur pour CSV
         file_path, _ = QFileDialog.getOpenFileName(
             self.page,
             "Sélectionner un fichier CSV",
@@ -137,6 +138,7 @@ class TraitementNavigation:
         self._last_progress_message = ''
         self._show_loading_page()
 
+        # TODO : lancer data_service seulement lors du premier traitement, et le réutiliser pour les traitements suivants
         self.worker = TraitementWorker(file_path, BD_PT, data_service=self.data_service)
         self.worker.finished.connect(self.on_finished)
         self.worker.progress_updated.connect(self.on_progress_update)

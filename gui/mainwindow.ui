@@ -35,6 +35,12 @@
    <bool>true</bool>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <property name="sizePolicy">
+    <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+     <horstretch>0</horstretch>
+     <verstretch>0</verstretch>
+    </sizepolicy>
+   </property>
    <property name="layoutDirection">
     <enum>Qt::LayoutDirection::LeftToRight</enum>
    </property>
@@ -66,7 +72,6 @@
      <number>0</number>
     </property>
     <widget class="QWidget" name="page"/>
-    <widget class="QWidget" name="page_2"/>
    </widget>
    <widget class="QLabel" name="label">
     <property name="geometry">
@@ -91,7 +96,7 @@
      <rect>
       <x>10</x>
       <y>40</y>
-      <width>191</width>
+      <width>197</width>
       <height>239</height>
      </rect>
     </property>
