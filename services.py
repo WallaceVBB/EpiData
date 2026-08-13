@@ -9,22 +9,29 @@
 ## Bibliothèques
 import os
 import sqlite3
-import joblib
 import pandas as pd
 from types import SimpleNamespace
 
 from utils import console, MODELES_DIR, PARAMETRES_DIR, BD_PT, BD_ENTRAINEMENT, ressource_path
 
+# Colonnes de la table produits, dans l'ordre du schéma défini par creer_bd_pt.
+COLONNES_PRODUITS = [
+    'texte_brut', 'texte_propre', 'code_produit', 'siret', 'fournisseur',
+    'base_variante', 'aliment', 'variante', 'conditionnement', 'packaging',
+    'unite_packaging', 'origine', 'poids_unitaire', 'poids_min', 'poids_max',
+    'unite_poids', 'poids_total_kg', 'labels', 'allergenes', 'conservation',
+    'unite_consommation', 'tva', 'confiance_basevariante', 'methode_prediction',
+    'a_reviser', 'est_corrige', 'date_ajout', 'date_maj',
+]
+
 
 class DataService:
-    def __init__(self, app=None):
+    def __init__(self, app=None, bd_pt=None, bd_entrainement=None):
         self.app = app
+        self.bd_pt = bd_pt or BD_PT
+        self.bd_entrainement = bd_entrainement or BD_ENTRAINEMENT
         self.local = SimpleNamespace()
         self.conn = None
-        self.vectoriseur = None
-        self.modele_basevariante = None
-        self.vectoriseur_tfidf_cosine = None
-        self.donnees_basevariante_cosine = None
         self.dictionnaire_labels = {}
         self.dictionnaire_origines = {}
         self.dictionnaire_unites_poids = {}
@@ -35,7 +42,8 @@ class DataService:
         self.creer_dossiers()
 
         try:
-            self.conn = sqlite3.connect(BD_PT)
+            self.conn = sqlite3.connect(self.bd_pt)
+            self.conn.row_factory = sqlite3.Row
             self.initialiser_bd()
         except Exception as e:
             console.print(f"[red]Erreur: impossible de créer/ouvrir la base de données: {e}")
@@ -46,22 +54,18 @@ class DataService:
         except Exception as e:
             console.print(f"[yellow]Avertissement lors du chargement des CSV: {e}")
 
-        try:
-            self.charger_modeles()
-        except Exception as e:
-            console.print(f"[yellow]Avertissement lors du chargement des modèles: {e}")
-
     def creer_dossiers(self):
         """Crée les dossiers nécessaires de l'application."""
         os.makedirs(MODELES_DIR, exist_ok=True)
         os.makedirs(PARAMETRES_DIR, exist_ok=True)
-        os.makedirs(os.path.dirname(BD_PT), exist_ok=True)
-        os.makedirs(os.path.dirname(BD_ENTRAINEMENT), exist_ok=True)
+        os.makedirs(os.path.dirname(self.bd_pt), exist_ok=True)
+        os.makedirs(os.path.dirname(self.bd_entrainement), exist_ok=True)
 
     def initialiser_bd(self):
         """Initialise la base de données des produits traités."""
         if self.conn is not None:
             self.creer_bd_pt(self.conn)
+            self.migrer_bd_si_necessaire(self.conn)
 
     def charger_csvs(self):
         """Charge les CSV de paramètres et crée des dictionnaires utiles.
@@ -124,8 +128,12 @@ class DataService:
             except Exception:
                 self.poids_moyen_fl = pd.DataFrame()
 
-    def creer_bd_pt(self, conn):
-        """Crée les tables nécessaires dans la base de données de produits traités."""
+    def creer_bd_pt(self, conn=None):
+        """Crée les tables nécessaires dans la base de données de produits traités.
+        Ce schéma est la source de vérité unique de la table produits."""
+        conn = conn if conn is not None else self.conn
+        if conn is None:
+            return
         curseur = conn.cursor()
         curseur.execute('''CREATE TABLE IF NOT EXISTS produits (
                         id INTEGER PRIMARY KEY,
@@ -152,49 +160,32 @@ class DataService:
                         unite_consommation TEXT,
                         tva TEXT,
                         confiance_basevariante REAL,
+                        methode_prediction TEXT DEFAULT 'Non défini',
                         a_reviser BOOLEAN,
                         est_corrige BOOLEAN DEFAULT 0,
                         date_ajout TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         date_maj TIMESTAMP)''')
         conn.commit()
 
-    def charger_modeles(self):
-        """Charge des modèles si présents dans le dossier de modèles.
-        Comportement tolérant en cas d'absence.
-        """
-        vectoriseur_path = os.path.join(MODELES_DIR, 'vectoriseur.joblib')
-        modele_path = os.path.join(MODELES_DIR, 'modele_basevariante.joblib')
-        vectoriseur_cosine_path = os.path.join(MODELES_DIR, 'vectoriseur_tfidf_cosine.joblib')
-        donnees_cosine_path = os.path.join(MODELES_DIR, 'donnees_basevariante_cosine.joblib')
-
-        if os.path.exists(vectoriseur_path) and os.path.exists(modele_path):
-            try:
-                self.vectoriseur = joblib.load(vectoriseur_path)
-                self.modele_basevariante = joblib.load(modele_path)
-            except Exception as e:
-                console.print(f"[yellow]Impossible de charger les modèles LinearSVC: {e}")
-                self.vectoriseur = None
-                self.modele_basevariante = None
-        else:
-            self.vectoriseur = None
-            self.modele_basevariante = None
-
-        if os.path.exists(vectoriseur_cosine_path) and os.path.exists(donnees_cosine_path):
-            try:
-                self.vectoriseur_tfidf_cosine = joblib.load(vectoriseur_cosine_path)
-                self.donnees_basevariante_cosine = joblib.load(donnees_cosine_path)
-            except Exception as e:
-                console.print(f"[yellow]Impossible de charger les modèles TF-IDF Cosine: {e}")
-                self.vectoriseur_tfidf_cosine = None
-                self.donnees_basevariante_cosine = None
-        else:
-            self.vectoriseur_tfidf_cosine = None
-            self.donnees_basevariante_cosine = None
-
-        if self.vectoriseur is not None and self.modele_basevariante is not None:
-            console.print("[bold green]✓ Modèles LinearSVC chargés avec succès")
-        if self.vectoriseur_tfidf_cosine is not None and self.donnees_basevariante_cosine is not None:
-            console.print("[bold green]✓ Modèles TF-IDF Cosine chargés avec succès")
+    def migrer_bd_si_necessaire(self, conn=None):
+        """Aligne une base existante sur le schéma de creer_bd_pt (bases créées
+        avant l'ajout de la colonne 'methode_prediction')."""
+        conn = conn if conn is not None else self.conn
+        if conn is None:
+            return
+        try:
+            curseur = conn.cursor()
+            curseur.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produits'")
+            if not curseur.fetchone():
+                return
+            curseur.execute("PRAGMA table_info(produits)")
+            colonnes = [row[1] for row in curseur.fetchall()]
+            if 'methode_prediction' not in colonnes:
+                curseur.execute("ALTER TABLE produits ADD COLUMN methode_prediction TEXT DEFAULT 'Non défini'")
+                conn.commit()
+                console.print("[cyan]Colonne 'methode_prediction' ajoutée à la table produits")
+        except Exception as e:
+            console.print(f"[red]Erreur lors de la migration de la base de produits traités: {e}")
 
     def creer_bd_entrainement(self):
         """Crée une nouvelle base de données d'entraînement à partir du CSV pt_base.csv."""
@@ -212,16 +203,16 @@ class DataService:
         df['base_variante'] = df['base_variante'].astype(str).str.strip()
         df = df[(df['designation'] != '') & (df['base_variante'] != '')]
 
-        os.makedirs(os.path.dirname(BD_ENTRAINEMENT), exist_ok=True)
-        with sqlite3.connect(BD_ENTRAINEMENT) as conn:
+        os.makedirs(os.path.dirname(self.bd_entrainement), exist_ok=True)
+        with sqlite3.connect(self.bd_entrainement) as conn:
             df.to_sql('entrainement', conn, if_exists='replace', index=False)
 
-        console.print(f"[green]Base d'entraînement créée avec succès : {BD_ENTRAINEMENT}")
+        console.print(f"[green]Base d'entraînement créée avec succès : {self.bd_entrainement}")
         return True
 
     def maj_bd_entrainement(self):
         """Met à jour la base d'entraînement à partir de la base de produits traités."""
-        if not os.path.exists(BD_ENTRAINEMENT):
+        if not os.path.exists(self.bd_entrainement):
             console.print("[yellow]Base d'entraînement introuvable, création à partir de pt_base.csv...[/yellow]")
             self.creer_bd_entrainement()
 
@@ -264,7 +255,7 @@ class DataService:
             return False
 
         try:
-            with sqlite3.connect(BD_ENTRAINEMENT) as conn:
+            with sqlite3.connect(self.bd_entrainement) as conn:
                 df_existant = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn)
         except Exception:
             df_existant = pd.DataFrame(columns=['designation', 'base_variante'])
@@ -272,7 +263,7 @@ class DataService:
         df_combine = pd.concat([df_existant, df_selection], ignore_index=True)
         df_combine = df_combine.drop_duplicates(subset=['designation', 'base_variante']).reset_index(drop=True)
 
-        with sqlite3.connect(BD_ENTRAINEMENT) as conn:
+        with sqlite3.connect(self.bd_entrainement) as conn:
             df_combine.to_sql('entrainement', conn, if_exists='replace', index=False)
 
         console.print(f"[green]Base d'entraînement mise à jour avec {len(df_selection)} enregistrements issus de bd_pt. Total = {len(df_combine)}")
@@ -291,6 +282,65 @@ class DataService:
         except Exception as e:
             console.print(f"[red]Erreur lors de l'insertion des produits: {e}")
             return False
+
+    def inserer_produit(self, produit, commit=True):
+        """Insère un produit (dictionnaire) et retourne son identifiant."""
+        if self.conn is None:
+            console.print("[red]Connexion à la base de données non disponible")
+            return None
+
+        colonnes = [colonne for colonne in COLONNES_PRODUITS if colonne in produit]
+        valeurs = [produit[colonne] for colonne in colonnes]
+        placeholders = ", ".join(["?"] * len(colonnes))
+        requete = f"INSERT INTO produits ({', '.join(colonnes)}) VALUES ({placeholders})"
+
+        curseur = self.conn.cursor()
+        curseur.execute(requete, valeurs)
+        if commit:
+            self.conn.commit()
+        return curseur.lastrowid
+
+    def obtenir_produit_par_code_produit(self, code_produit):
+        """Récupère un produit à partir de son code produit."""
+        return self._obtenir_produit("code_produit", code_produit)
+
+    def obtenir_produit_par_texte_brut(self, texte_brut):
+        """Récupère un produit à partir de sa désignation brute."""
+        return self._obtenir_produit("texte_brut", texte_brut)
+
+    def _obtenir_produit(self, colonne, valeur):
+        if self.conn is None or valeur is None:
+            return None
+
+        curseur = self.conn.cursor()
+        curseur.execute(f"SELECT * FROM produits WHERE {colonne} = ?", (valeur,))
+        ligne = curseur.fetchone()
+        return dict(ligne) if ligne is not None else None
+
+    def supprimer_produits(self, produits, commit=True):
+        """Supprime des produits identifiés par leur code produit ou, à défaut,
+        par leur désignation brute. `produits` est un itérable de dictionnaires
+        (ou de lignes de DataFrame) et la méthode retourne le nombre de lignes supprimées."""
+        if self.conn is None:
+            console.print("[red]Connexion à la base de données non disponible")
+            return 0
+
+        curseur = self.conn.cursor()
+        supprimes = 0
+        for produit in produits:
+            code_produit = produit.get('code_produit')
+            texte_brut = produit.get('texte_brut')
+            if code_produit is not None and str(code_produit).strip() not in ("", "nan"):
+                curseur.execute("DELETE FROM produits WHERE code_produit = ?", (code_produit,))
+            elif texte_brut is not None and str(texte_brut).strip() not in ("", "nan"):
+                curseur.execute("DELETE FROM produits WHERE texte_brut = ?", (texte_brut,))
+            else:
+                continue
+            supprimes += curseur.rowcount if curseur.rowcount > 0 else 0
+
+        if commit:
+            self.conn.commit()
+        return supprimes
 
     def mettre_a_jour_produit(self, produit_id, donnees):
         """Met à jour les données d'un produit."""
@@ -351,15 +401,13 @@ class DataService:
             console.print(f"[red]Erreur lors de la récupération du produit: {e}")
             return None
 
+    def valider(self):
+        """Valide (commit) la transaction en cours."""
+        if self.conn is not None:
+            self.conn.commit()
 
-# Compatibilité avec l'ancien code qui importait des fonctions globales.
-def creer_bd_pt(service, conn):
-    return DataService.creer_bd_pt(service, conn)
-
-
-def creer_bd_entrainement(service):
-    return DataService.creer_bd_entrainement(service)
-
-
-def maj_bd_entrainement(service):
-    return DataService.maj_bd_entrainement(service)
+    def fermer(self):
+        """Ferme la connexion à la base de données."""
+        if self.conn is not None:
+            self.conn.close()
+            self.conn = None

@@ -1,198 +1,35 @@
 ## Explication du fichier
 # Ce ficher fait le traitement des données importer (fichier CSV à traiter)
+# Couche de traitement : elle orchestre la couche ML (gestion_ml.py) et la couche
+# de persistance (services.py). Elle ne contient ni SQL brut ni code d'interface graphique.
 
 ## Bibliothèques
 import os
-import sqlite3
-import pandas as pd
-import numpy as np
-from datetime import datetime
-import threading
-from tkinter import filedialog, messagebox
 import re
-import joblib
-from sklearn.metrics.pairwise import cosine_similarity
-from utils import BD_PT, MODELES_DIR, ressource_path
-from gestion_ml import creer_modeles
-from services import creer_bd_pt
+
+import pandas as pd
+
+from gestion_ml import GestionML
+from services import DataService
+from utils import ressource_path, nettoyer_texte
 
 
 # Code
-#TODO: bouger une partie de ce code pour n_revision.py quand ça sera prêt
-class ImportationDonnees:
-    # Cette classe pour gérer l'importation et le traitement des données de produits propres (designation, base_variante) pour l'entraînement des modèles depuis un fichier CSV.
-    def __init__(self, bd_pt, controller=None):        
-        self.bd_pt = bd_pt
-        self.controller = controller
-        self.last_error = None
-        self.classificateur = ClassificateurProduits(controller=controller)
-        self.importer_csv_pp()
-
-    def importer_csv_pp(self):
-        """Ouvre une boîte de dialogue pour choisir un fichier CSV et lance le traitement en thread."""
-        # TODO: Ajouter possibilité de choisir un fichier Excel ou CSV
-        file_path = filedialog.askopenfilename(filetypes=[("Fichiers CSV", "*.csv")])
-        if file_path:
-            file_path = os.path.normpath(file_path)
-            threading.Thread(
-                target=self.traiter_fichier_pp,
-                args=(file_path,),
-                daemon=True
-            ).start()
-
-    def traiter_fichier_pp(self, file_path):
-        """Traite le fichier CSV de produits propres et l'importe dans la base de données."""
-        #TODO: Remplacer les fonctions par le traitement de la class ClassificateurProduits
-        try:
-            # Lire le fichier CSV
-            df = pd.read_csv(file_path)
-
-            # Vérifier les colonnes obligatoires
-            colonnes_requises = ['designation', 'base_variante']
-            for col in colonnes_requises:
-                if col not in df.columns:
-                    raise ValueError(f"Colonne manquante: {col}")
-
-            # Ajouter les colonnes manquantes avec valeurs par défaut
-            if 'siret' in df.columns:
-                df['fournisseur'] = df['siret'].apply(self.classificateur.attribuer_fournisseur)
-            else:
-                df['fournisseur'] = None
-
-            # Attribuer aliment, variante, allergènes et TVA à partir de base_variante
-            if not all(col in df.columns for col in ['aliment', 'variante', 'allergenes', 'tva']):
-                resultats_attribution = df['base_variante'].apply(
-                    lambda x: self.classificateur.convertir_base_variante(str(x)) if pd.notna(x) else (
-                    None, None, None, None, None)
-                )
-                df[['aliment', 'variante', 'allergenes', 'tva', 'famille']] = pd.DataFrame(
-                    resultats_attribution.tolist(),
-                    index=df.index
-                )
-
-            if 'poids_unitaire' not in df.columns:
-                if 'poids_min' in df.columns and 'poids_max' in df.columns:
-                    df['poids_unitaire'] = (df['poids_min'].fillna(0) + df['poids_max'].fillna(0)) / 2
-                else:
-                    df['poids_unitaire'] = None
-
-            if not 'unite_consommation' in df.columns:
-                def _unite_consommation(row):
-                    unite_poids = row.get('unite_poids', None)
-                    if unite_poids == 'g':
-                        return 'pièce'
-                    elif unite_poids == 'kg':
-                        return 'Kg'
-                    elif unite_poids == 'L':
-                        return 'L'
-                    elif unite_poids == 'ml':
-                        return 'pièce'
-                    else:
-                        return unite_poids
-
-                df['unite_consommation'] = df.apply(_unite_consommation, axis=1)
-
-            # Ajouter les colonnes de confiance et flags
-            df['confiance_basevariante'] = 1.0
-            df['a_reviser'] = False
-            df['est_corrige'] = False
-            df['date_ajout'] = datetime.now()
-
-            # Ajouter texte_propre si manquant
-            if 'texte_propre' not in df.columns:
-                df['texte_propre'] = df['texte_brut'].apply(self.classificateur.nettoyer_texte)
-
-            # Remover colonne temporaire 'famille'
-            if 'famille' in df.columns:
-                df = df.drop(columns=['famille'])
-
-            # Enregistrer dans la base de données
-            self.importer_pp_bd(df)
-            if self.controller:
-                self.controller.after(0, lambda: messagebox.showinfo("Succès", "Importation terminée avec succès!"))
-            else:
-                messagebox.showinfo("Succès", "Importation terminée avec succès!")
-
-        except Exception as e:
-            self.last_error = e
-            if self.controller:
-                self.controller.after(0, lambda: messagebox.showerror("Erreur",
-                                                                      f"Erreur lors de l'importation: \n{str(e)}"))
-            else:
-                messagebox.showerror("Erreur", f"Erreur lors de l'importation: \n{str(e)}")
-
-    def importer_pp_bd(self, df):
-        # TODO : il faut que la colonne a_reviser soit "false" et que la colonne est_corrige soit "true"
-        """Insère le DataFrame dans la base de données SQLite."""
-        conn = sqlite3.connect(self.bd_pt)
-        try:
-            cursor = conn.cursor()
-            # --- VERIFIER SCHEMA AVANT ---
-            print("Schema da tableau produits avant l'insert:")
-            for row in cursor.execute("PRAGMA table_info(produits);"):
-                print(row)
-            # Supprime la colonne 'id' si elle existe pour laisser SQLite gérer l'auto-incrément
-            if 'id' in df.columns:
-                df = df.drop(columns=['id'])
-            if df.index.name == 'id':
-                df.index.name = None
-            df = df.reset_index(drop=True)
-
-            # Sélectionner uniquement les colonnes existantes dans la table
-            colonnes_table = [
-                'texte_brut', 'texte_propre', 'code_produit', 'siret', 'fournisseur',
-                'base_variante', 'aliment', 'variante', 'conditionnement', 'packaging', 'unite_packaging',
-                'origine', 'poids_unitaire', 'poids_min',
-                'poids_max', 'unite_poids', 'poids_total_kg', 'labels', 'allergenes',
-                'unite_consommation', 'tva', 'confiance_basevariante', 
-                'methode_prediction', 'a_reviser', 'est_corrige', 'date_ajout'
-            ]
-
-            # Filtrer les colonnes existantes dans le DataFrame
-            colonnes_a_inserer = [col for col in colonnes_table if col in df.columns]
-            df = df[colonnes_a_inserer]
-
-            # Supprime les produits en doublon
-            for _, row in df.iterrows():
-                code_produit = row.get('code_produit')
-                texte_brut = row.get('texte_brut')
-
-                # Supprime d'abord par code_produit, si déjà existant (si non None)
-                if pd.notna(code_produit) and str(code_produit).strip() != "":
-                    cursor.execute(
-                        "DELETE FROM produits WHERE code_produit = ?",
-                        (code_produit,)
-                    )
-                # Puis, s'il n'a pas trouvé un code produit, essayer par le texte_brut
-                else:
-                    cursor.execute(
-                        "DELETE FROM produits WHERE texte_brut = ?",
-                        (texte_brut,)
-                    )
-            conn.commit()
-
-            # Insérer dans la base de données
-            df.to_sql('produits', conn, if_exists='append', index=False)
-            print("Schema du tableau produits APRÈS l'insert:")
-            for row in cursor.execute("PRAGMA table_info(produits);"):
-                print(row)
-        finally:
-            conn.close()
-
-
 class ClassificateurProduits:
     """Classe pour classifier et traiter les produits alimentaires."""
     
-    def __init__(self, controller=None, bd_pt=None):
+    def __init__(self, controller=None, bd_pt=None, data_service=None, gestion_ml=None):
         """Initialise le classificateur avec tous les attributs nécessaires."""
         self.controller = controller
-        self.bd_pt = bd_pt or BD_PT
-        
+
+        # Couche de persistance (source unique des accès base de données)
+        self.data_service = data_service or getattr(controller, 'data_service', None) or DataService(bd_pt=bd_pt)
+        self.bd_pt = self.data_service.bd_pt
+
+        # Couche ML (propriétaire des modèles et de l'inférence)
+        self.gestion_ml = gestion_ml or GestionML(data_service=self.data_service)
+
         # Initialiser les attributs avec des valeurs par défaut
-        self.vectoriseur = None
-        self.modele_basevariante = None
-        self.vectoriseur_tfidf_cosine = None
-        self.donnees_basevariante_cosine = None
         self.categories = pd.DataFrame()  # DataFrame des catégories (bases, variantes, familles)
         self.fournisseurs = pd.DataFrame()  # DataFrame des fournisseurs
         self.labels = {}  # Dictionnaire des labels
@@ -200,43 +37,23 @@ class ClassificateurProduits:
         self.unites_poids = {}  # Dictionnaire des unités de poids
         self.traitement_appertises = pd.DataFrame()  # DataFrame du traitement des appertises
         self.poids_moyen_fl = pd.DataFrame()  # DataFrame des poids moyens fruits/légumes
-        
-        # Charger les données depuis le service si disponible
+
+        # Charger les données depuis le service
         self._charger_donnees_service()
         self._charger_parametres()
-        
-        # Migrer la BD si nécessaire
-        self._migrer_bd_si_necessaire()
-    
-    def _charger_donnees_service(self):
-        """Charge les données depuis le service de données s'il est disponible."""
-        try:
-            # Si on a un contrôleur avec un data_service, charger les données depuis là
-            if self.controller and hasattr(self.controller, 'data_service'):
-                data_service = self.controller.data_service
 
-                if hasattr(data_service, 'dictionnaire_labels'):
-                    self.labels = data_service.dictionnaire_labels
-                if hasattr(data_service, 'dictionnaire_origines'):
-                    self.origines = data_service.dictionnaire_origines
-                if hasattr(data_service, 'dictionnaire_unites_poids'):
-                    self.unites_poids = data_service.dictionnaire_unites_poids
-                if hasattr(data_service, 'vectoriseur'):
-                    self.vectoriseur = data_service.vectoriseur
-                if hasattr(data_service, 'modele_basevariante'):
-                    self.modele_basevariante = data_service.modele_basevariante
-                if hasattr(data_service, 'vectoriseur_tfidf_cosine'):
-                    self.vectoriseur_tfidf_cosine = data_service.vectoriseur_tfidf_cosine
-                if hasattr(data_service, 'donnees_basevariante_cosine'):
-                    self.donnees_basevariante_cosine = data_service.donnees_basevariante_cosine
-                if hasattr(data_service, 'csv_fournisseurs'):
-                    self.fournisseurs = data_service.csv_fournisseurs if data_service.csv_fournisseurs is not None else pd.DataFrame()
-                if hasattr(data_service, 'traitement_appertises'):
-                    self.traitement_appertises = data_service.traitement_appertises
-                if hasattr(data_service, 'poids_moyen_fl'):
-                    self.poids_moyen_fl = data_service.poids_moyen_fl
-        except Exception:
-            pass  # Si le chargement échoue, utiliser les valeurs par défaut
+    def _charger_donnees_service(self):
+        """Charge les données de référence depuis le service de données."""
+        data_service = self.data_service
+        if data_service is None:
+            return
+
+        self.labels = data_service.dictionnaire_labels
+        self.origines = data_service.dictionnaire_origines
+        self.unites_poids = data_service.dictionnaire_unites_poids
+        self.fournisseurs = data_service.csv_fournisseurs if data_service.csv_fournisseurs is not None else pd.DataFrame()
+        self.traitement_appertises = data_service.traitement_appertises
+        self.poids_moyen_fl = data_service.poids_moyen_fl
 
     def _charger_parametres(self):
         """Charge les fichiers de paramètres nécessaires au traitement."""
@@ -249,126 +66,23 @@ class ClassificateurProduits:
         except Exception as e:
             print(f"Erreur lors du chargement des paramètres catégories: {e}")
 
-    def _migrer_bd_si_necessaire(self):
-        """Ajoute la colonne 'methode_prediction' à la table produits si elle n'existe pas."""
-        try:
-            with sqlite3.connect(self.bd_pt) as conn:
-                cursor = conn.cursor()
-                # Vérifier si la table produits existe
-                cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='produits'")
-                if cursor.fetchone():
-                    # Vérifier si la colonne existe
-                    cursor.execute("PRAGMA table_info(produits)")
-                    colonnes = [row[1] for row in cursor.fetchall()]
-                    if 'methode_prediction' not in colonnes:
-                        # Ajouter la colonne avec une valeur par défaut
-                        cursor.execute("ALTER TABLE produits ADD COLUMN methode_prediction TEXT DEFAULT 'Non défini'")
-                        conn.commit()
-                        print("[cyan]Colonne 'methode_prediction' ajoutée à la table produits[/cyan]")
-        except Exception as e:
-            print(f"Erreur lors de la migration de la BD: {e}")
-    
     def charger_modeles(self):
-        """Charge tous les modèles de machine learning nécessaires."""
-        try:
-            # Charger les modèles de la première méthode (LinearSVC)
-            vectoriseur_path = os.path.join(MODELES_DIR, 'vectoriseur.joblib')
-            modele_path = os.path.join(MODELES_DIR, 'modele_basevariante.joblib')
+        """Charge les modèles via la couche ML."""
+        self.gestion_ml.charger_modeles()
 
-            if os.path.exists(vectoriseur_path) and os.path.exists(modele_path):
-                self.vectoriseur = joblib.load(vectoriseur_path)
-                self.modele_basevariante = joblib.load(modele_path)
-            else:
-                self.vectoriseur = None
-                self.modele_basevariante = None
-
-            # Charger les modèles de la deuxième méthode (TF-IDF Cosine)
-            vectoriseur_cosine_path = os.path.join(MODELES_DIR, 'vectoriseur_tfidf_cosine.joblib')
-            donnees_cosine_path = os.path.join(MODELES_DIR, 'donnees_basevariante_cosine.joblib')
-
-            if os.path.exists(vectoriseur_cosine_path) and os.path.exists(donnees_cosine_path):
-                self.vectoriseur_tfidf_cosine = joblib.load(vectoriseur_cosine_path)
-                self.donnees_basevariante_cosine = joblib.load(donnees_cosine_path)
-            else:
-                self.vectoriseur_tfidf_cosine = None
-                self.donnees_basevariante_cosine = None
-        except Exception as e:
-            print(f"Erreur lors du chargement des modèles: {e}")
-            self.vectoriseur = None
-            self.modele_basevariante = None
-            self.vectoriseur_tfidf_cosine = None
-            self.donnees_basevariante_cosine = None
-    
     def predire_avec_methode_cosine(self, texte):
-        """
-        Prédit la basevariante en utilisant TF-IDF avec similarité cosinus.
-        Retourne: (prediction, score_confiance)
-        """
-        try:
-            if self.vectoriseur_tfidf_cosine is None or self.donnees_basevariante_cosine is None:
-                return None, 0.0
-            
-            texte_propre = self.nettoyer_texte(texte)
-            tfidf_input = self.vectoriseur_tfidf_cosine.transform([texte_propre])
-            
-            # Vectoriser toutes les basevariantes de référence
-            basevariantes = self.donnees_basevariante_cosine['base_variantes']
-            tfidf_reference = self.vectoriseur_tfidf_cosine.transform(basevariantes)
-            
-            # Calculer la similarité cosinus
-            similarites = cosine_similarity(tfidf_input, tfidf_reference)[0]
-            
-            # Obtenir l'index du meilleur résultat
-            meilleur_index = np.argmax(similarites)
-            score_confiance = similarites[meilleur_index]
-            prediction = basevariantes[meilleur_index]
-            
-            return prediction, score_confiance
-        except Exception as e:
-            print(f"Erreur dans la méthode cosine: {e}")
-            return None, 0.0
-    
+        """Prédiction TF-IDF Cosine, déléguée à la couche ML.
+        Retourne: (prediction, score_confiance)"""
+        return self.gestion_ml.predire_avec_cosine_similarity(texte)
+
     def predire_avec_methode_hybride(self, texte):
-        """
-        Prédit la basevariante en utilisant une approche hybride:
-        1. Essaye la méthode 2 (TF-IDF Cosine) - plus légère et rapide
-        2. Si accuracy >= 95%, l'utiliser directement
-        3. Si accuracy < 95%, essaye la méthode 1 (LinearSVC)
-        4. Si accuracy M1 >= 70%, l'utiliser
-        5. Si accuracy M1 < 70%, comparer et retourner le meilleur
-        
-        Retourne: (prediction, score_confiance, methode_utilisee)
-        """
-        texte_propre = self.nettoyer_texte(texte)
-        vecteur = self.vectoriseur.transform([texte_propre])
-        
-        # Étape 1: Essayer Méthode 2 (TF-IDF Cosine)
-        pred_method2, proba_method2 = self.predire_avec_methode_cosine(texte)
-        
-        # Étape 2: Si M2 >= 95%, l'utiliser directement
-        if proba_method2 >= 0.95:
-            return pred_method2, proba_method2, "TF-IDF_Cosine"
-        
-        # Étape 3: Essayer Méthode 1 (LinearSVC)
-        pred_method1 = self.modele_basevariante.predict(vecteur)[0]
-        proba_method1 = np.max(self.modele_basevariante.predict_proba(vecteur))
-        
-        # Étape 4: Si M1 >= 70%, l'utiliser directement
-        if proba_method1 >= 0.70:
-            return pred_method1, proba_method1, "LinearSVC"
-        
-        # Étape 5: Si M1 < 70%, comparer les deux et prendre le meilleur
-        if proba_method2 > proba_method1:
-            return pred_method2, proba_method2, "TF-IDF_Cosine"
-        else:
-            return pred_method1, proba_method1, "LinearSVC"
-            
+        """Prédiction hybride (TF-IDF Cosine puis LinearSVC), déléguée à la couche ML.
+        Retourne: (prediction, score_confiance, methode_utilisee)"""
+        return self.gestion_ml.predire_avec_methode_hybride(texte)
+
     def nettoyer_texte(self, texte):
-        """Nettoie et normalise le texte"""
-        texte = str(texte).lower()
-        texte = re.sub(r'[^\w\s-]', '', texte)
-        texte = re.sub(r'\s+', ' ', texte).strip()
-        return texte
+        """Nettoie et normalise le texte (implémentation unique dans utils.py)."""
+        return nettoyer_texte(texte)
 
     def attribuer_aliment_et_variante(self, texte):
         # TODO : utiliser la méthode hybride pour determiner la basevariante, et ensuite attribuer aliment et variante
@@ -396,8 +110,10 @@ class ClassificateurProduits:
             return None
 
         # S'assurer que les fournisseurs sont chargés
-        if not hasattr(self, 'fournisseurs') or self.fournisseurs is None or self.fournisseurs.empty:
-            self.charger_fournisseurs()
+        if self.fournisseurs is None or self.fournisseurs.empty:
+            self._charger_donnees_service()
+        if self.fournisseurs is None or self.fournisseurs.empty:
+            return None
 
         mask = self.fournisseurs['siret'].astype(str).str.strip() == str(siret).strip()
         matching_rows = self.fournisseurs[mask]
@@ -607,10 +323,8 @@ class ClassificateurProduits:
             # Vérifier si base_variante est présente dans le CSV
             base_variante = getattr(self, 'base_variante', None)
             if not base_variante:
-                texte_propre = self.nettoyer_texte(texte)
-                vecteur = self.vectoriseur.transform([texte_propre])
-                base_variante = self.modele_basevariante.predict(vecteur)[0]
-            base_variante = base_variante.lower()
+                base_variante, _ = self.gestion_ml.predire_avec_svc(texte)
+            base_variante = base_variante.lower() if base_variante else ''
 
             # Cas 2 : Poids non trouvé → chercher conditionnement
             conditionnement, _, _ = self.extraire_packaging(texte)
@@ -673,196 +387,187 @@ class ClassificateurProduits:
 
     def classifier_produits(self, fichier_entree, progress_callback=None):
         """Classifie les produits à partir d'un fichier CSV avec colonnes: designation (obligatoire), code_produit (optionnel), siret (optionnel)"""
-        self.charger_modeles()
-
-        if self.vectoriseur is None or self.modele_basevariante is None:
-            vectoriseur_path = os.path.join(MODELES_DIR, 'vectoriseur.joblib')
-            modele_path = os.path.join(MODELES_DIR, 'modele_basevariante.joblib')
-
-            if os.path.exists(vectoriseur_path) and os.path.exists(modele_path):
-                raise RuntimeError(
-                    "Les fichiers de modèles existent mais n'ont pas pu être chargés. "
-                    "Supprimez-les et relancez le traitement pour tenter une reconstruction."
-                )
-
-            try:
-                creer_modeles(self)
-                self.charger_modeles()
-            except Exception as e:
-                raise RuntimeError(
-                    "Impossible de créer les modèles de classification. "
-                    f"Vérifiez les fichiers dans le dossier 'modeles'. Détail: {e}"
-                ) from e
-
-            if self.vectoriseur is None or self.modele_basevariante is None:
-                raise RuntimeError(
-                    "Les modèles n'ont pas été créés correctement. "
-                    "Vérifiez l'état du dossier 'modeles'."
-                )
+        self.preparer_modeles()
 
         try:
-            with sqlite3.connect(self.bd_pt) as conn:
-                conn.row_factory = sqlite3.Row
-                creer_bd_pt(self, conn) # Créer la base de connaissance si elle n'existe pas
-                cursor = conn.cursor()
-                resultats = []  # Liste pour stocker les résultats
+            self.data_service.creer_bd_pt()  # Créer la base de connaissance si elle n'existe pas
+            resultats = []  # Liste pour stocker les résultats
 
-                # Lire le fichier CSV
-                df = pd.read_csv(fichier_entree, dtype=str)
+            # Lire le fichier CSV
+            df = pd.read_csv(fichier_entree, dtype=str)
 
-                # Normaliser les noms de colonnes (ex: 'DESIGNATION' → 'designation')
-                df.columns = df.columns.str.lower()
+            # Normaliser les noms de colonnes (ex: 'DESIGNATION' → 'designation')
+            df.columns = df.columns.str.lower()
 
-                # Flexibilisation de la manière d'écrire les colonnes
-                alias_code_produit = ['code produit', 'code_produit', 'codeproduit', 'code', 'code produi',
-                                      'ode_produit', 'ode produit']
+            # Flexibilisation de la manière d'écrire les colonnes
+            alias_code_produit = ['code produit', 'code_produit', 'codeproduit', 'code', 'code produi',
+                                  'ode_produit', 'ode produit']
 
-                # Ckecker les alias de 'code_produit'
-                for alias in alias_code_produit:
-                    if alias in df.columns:
-                        df['code_produit'] = df[alias]
-                        break
+            # Ckecker les alias de 'code_produit'
+            for alias in alias_code_produit:
+                if alias in df.columns:
+                    df['code_produit'] = df[alias]
+                    break
 
-                # Garantire que les autres colonnes existent
-                if 'code_produit' not in df.columns:
-                    df['code_produit'] = None
-                if 'siret' not in df.columns:
-                    df['siret'] = None
-                if 'designation' not in df.columns:
-                    raise ValueError("Le fichier CSV doit contenir une colonne 'designation'.")
+            # Garantire que les autres colonnes existent
+            if 'code_produit' not in df.columns:
+                df['code_produit'] = None
+            if 'siret' not in df.columns:
+                df['siret'] = None
+            if 'designation' not in df.columns:
+                raise ValueError("Le fichier CSV doit contenir une colonne 'designation'.")
 
-                produits = df.to_dict(orient='records')
+            produits = df.to_dict(orient='records')
 
-                for i, produit in enumerate(produits):
-                    texte_brut = produit.get('designation', '').strip()
-                    code_produit = produit.get('code_produit')
-                    siret = produit.get('siret')
+            for i, produit in enumerate(produits):
+                texte_brut = produit.get('designation', '').strip()
+                code_produit = produit.get('code_produit')
+                siret = produit.get('siret')
 
-                    resultat = {}
-                    row = None
-                    # Cherche le produit dans la base_connaissance (d'abord par le code_produit et ensuite par le texte_brut)
-                    if code_produit:
-                        cursor.execute(
-                            "SELECT * FROM produits WHERE code_produit = ?",
-                            (code_produit,)
-                        )
-                        row = cursor.fetchone()
+                resultat = {}
+                # Cherche le produit dans la base_connaissance (d'abord par le code_produit et ensuite par le texte_brut)
+                row = self.data_service.obtenir_produit_par_code_produit(code_produit) if code_produit else None
 
-                    # 2. Si pas trouvé, chercher par texte_brut
-                    if not row:
-                        cursor.execute(
-                            "SELECT * FROM produits WHERE texte_brut = ?",
-                            (texte_brut,)
-                        )
-                        row = cursor.fetchone()
+                # 2. Si pas trouvé, chercher par texte_brut
+                if not row:
+                    row = self.data_service.obtenir_produit_par_texte_brut(texte_brut)
 
-                    if row:  # si produit trouvé dans la base
-                        resultat.update({
-                            'id': row['id'],
-                            'texte_brut': texte_brut,
-                            'texte_propre': row['texte_propre'],
-                            'code_produit': row['code_produit'],
-                            'siret': row['siret'],
-                            'fournisseur': row['fournisseur'],
-                            'base_variante': row['base_variante'],
-                            'aliment': row['aliment'],
-                            'variante': row['variante'],
-                            'conditionnement': row['conditionnement'],
-                            'packaging': row['packaging'],
-                            'unite_packaging': row['unite_packaging'],
-                            'origine': row['origine'],
-                            'poids_unitaire': row['poids_unitaire'],
-                            'poids_min': row['poids_min'],
-                            'poids_max': row['poids_max'],
-                            'unite_poids': row['unite_poids'],
-                            'poids_total_kg': row['poids_total_kg'],
-                            'labels': row['labels'],
-                            'allergenes': row['allergenes'],
-                            'unite_consommation': row['unite_consommation'],
-                            'tva': row['tva'],
-                            'confiance_basevariante': row['confiance_basevariante'],
-                            'methode_prediction': row['methode_prediction'] if 'methode_prediction' in row.keys() else 'Non défini',
-                            'a_reviser': bool(row['a_reviser']) if 'a_reviser' in row.keys() else False,
-                            'est_corrige': bool(row['est_corrige']) if 'est_corrige' in row.keys() else False
-                        })
+                if row:  # si produit trouvé dans la base
+                    resultat.update({
+                        'id': row['id'],
+                        'texte_brut': texte_brut,
+                        'texte_propre': row['texte_propre'],
+                        'code_produit': row['code_produit'],
+                        'siret': row['siret'],
+                        'fournisseur': row['fournisseur'],
+                        'base_variante': row['base_variante'],
+                        'aliment': row['aliment'],
+                        'variante': row['variante'],
+                        'conditionnement': row['conditionnement'],
+                        'packaging': row['packaging'],
+                        'unite_packaging': row['unite_packaging'],
+                        'origine': row['origine'],
+                        'poids_unitaire': row['poids_unitaire'],
+                        'poids_min': row['poids_min'],
+                        'poids_max': row['poids_max'],
+                        'unite_poids': row['unite_poids'],
+                        'poids_total_kg': row['poids_total_kg'],
+                        'labels': row['labels'],
+                        'allergenes': row['allergenes'],
+                        'unite_consommation': row['unite_consommation'],
+                        'tva': row['tva'],
+                        'confiance_basevariante': row['confiance_basevariante'],
+                        'methode_prediction': row.get('methode_prediction', 'Non défini'),
+                        'a_reviser': bool(row.get('a_reviser', False)),
+                        'est_corrige': bool(row.get('est_corrige', False))
+                    })
 
-                    else:  # produit pas encore présent dans la base_connaissance
-                        # Pré-traitement
-                        texte_propre = self.nettoyer_texte(texte_brut)
+                else:  # produit pas encore présent dans la base_connaissance
+                    # Pré-traitement
+                    texte_propre = self.nettoyer_texte(texte_brut)
 
-                        # Vectorisation
-                        vecteur = self.vectoriseur.transform([texte_propre])
+                    # Prédictions avec méthode hybride
+                    pred_basevariante, proba_basevariante, methode_prediction = self.predire_avec_methode_hybride(texte_brut)
 
-                        # Prédictions avec méthode hybride
-                        pred_basevariante, proba_basevariante, methode_prediction = self.predire_avec_methode_hybride(texte_brut)
+                    # Caractéristiques supplémentaires
+                    caracteristiques = self.extraire_caracteristiques(texte_brut, siret)
 
-                        # Caractéristiques supplémentaires
-                        caracteristiques = self.extraire_caracteristiques(texte_brut, siret)
+                    # Ajuste base_variante, aliment, variante si confiance < 25
+                    if proba_basevariante < 0.25:
+                        base_variante = "Produit non trouvé"
+                        aliment = "Produit non trouvé"
+                        variante = None
+                        allergenes = None
+                        tva = None
+                    else:
+                        base_variante = pred_basevariante
+                        aliment = caracteristiques['aliment']
+                        variante = caracteristiques['variante']
+                        allergenes = caracteristiques['allergenes']
+                        tva = caracteristiques['tva']
 
-                        # Ajuste base_variante, aliment, variante si confiance < 25
-                        if proba_basevariante < 0.25:
-                            base_variante = "Produit non trouvé"
-                            aliment = "Produit non trouvé"
-                            variante = None
-                            allergenes = None
-                            tva = None
-                        else:
-                            base_variante = pred_basevariante
-                            aliment = caracteristiques['aliment']
-                            variante = caracteristiques['variante']
-                            allergenes = caracteristiques['allergenes']
-                            tva = caracteristiques['tva']
+                    poids_total_kg = self.calculer_poids_total_kg(
+                        caracteristiques['poids'],
+                        caracteristiques['unite'],
+                        caracteristiques['unite_packaging'],
+                        caracteristiques['packaging']
+                    )
 
-                        poids_total_kg = self.calculer_poids_total_kg(
-                            caracteristiques['poids'],
-                            caracteristiques['unite'],
-                            caracteristiques['unite_packaging'],
-                            caracteristiques['packaging']
-                        )
+                    # Formatage du résultat
+                    resultat.update({
+                        'texte_brut': texte_brut,
+                        'texte_propre': texte_propre,
+                        'code_produit': code_produit,
+                        'siret': siret,
+                        'fournisseur': caracteristiques['fournisseur'],
+                        'base_variante': base_variante,
+                        'aliment': aliment,
+                        'variante': variante,
+                        'conditionnement': caracteristiques['conditionnement'],
+                        'packaging': caracteristiques['packaging'],
+                        'unite_packaging': caracteristiques['unite_packaging'],
+                        'origine': caracteristiques['origine'],
+                        'poids_unitaire': caracteristiques['poids'],
+                        'poids_min': caracteristiques['poids_min'],
+                        'poids_max': caracteristiques['poids_max'],
+                        'unite_poids': caracteristiques['unite'],
+                        'poids_total_kg': poids_total_kg,
+                        'labels': ','.join(caracteristiques['labels']) if caracteristiques['labels'] else None,
+                        'allergenes': allergenes,
+                        'unite_consommation': caracteristiques['unite_consommation'],
+                        'tva': tva,
+                        'confiance_basevariante': round(proba_basevariante * 100, 2),
+                        'methode_prediction': methode_prediction,
+                        'a_reviser': bool(proba_basevariante < 0.70),
+                        'est_corrige': False
+                    })
+                    # Sauvegarder et récupérer l'ID
+                    resultat['id'] = self.sauvegarder_produit(resultat, commit=False)
 
-                        # Formatage du résultat
-                        resultat.update({
-                            'texte_brut': texte_brut,
-                            'texte_propre': texte_propre,
-                            'code_produit': code_produit,
-                            'siret': siret,
-                            'fournisseur': caracteristiques['fournisseur'],
-                            'base_variante': base_variante,
-                            'aliment': aliment,
-                            'variante': variante,
-                            'conditionnement': caracteristiques['conditionnement'],
-                            'packaging': caracteristiques['packaging'],
-                            'unite_packaging': caracteristiques['unite_packaging'],
-                            'origine': caracteristiques['origine'],
-                            'poids_unitaire': caracteristiques['poids'],
-                            'poids_min': caracteristiques['poids_min'],
-                            'poids_max': caracteristiques['poids_max'],
-                            'unite_poids': caracteristiques['unite'],
-                            'poids_total_kg': poids_total_kg,
-                            'labels': ','.join(caracteristiques['labels']) if caracteristiques['labels'] else None,
-                            'allergenes': allergenes,
-                            'unite_consommation': caracteristiques['unite_consommation'],
-                            'tva': tva,
-                            'confiance_basevariante': round(proba_basevariante * 100, 2),
-                            'methode_prediction': methode_prediction,
-                            'a_reviser': bool(proba_basevariante < 0.70),
-                            'est_corrige': False
-                        })
-                        # Sauvegarder et récupérer l'ID
-                        resultat['id'] = self.sauvegarder_produit(resultat, conn)
+                resultats.append(resultat)
+                if progress_callback:
+                    progress = min(100, (i + 1) / len(produits) * 100)
+                    progress_callback(progress, f"Traitement en cours... {i + 1}/{len(produits)}")
 
-                    resultats.append(resultat)
-                    if progress_callback:
-                        progress = min(100, (i + 1) / len(produits) * 100)
-                        progress_callback(progress, f"Traitement en cours... {i + 1}/{len(produits)}")
-
-                conn.commit()
-                return pd.DataFrame(resultats)
+            self.data_service.valider()
+            return pd.DataFrame(resultats)
 
         except Exception as e:
             if progress_callback:
                 progress_callback(100, f"Erreur: {str(e)}")
             raise
+
+    def preparer_modeles(self):
+        """S'assure que les modèles de classification sont disponibles.
+        L'entraînement n'est déclenché que si aucun fichier de modèle n'est présent."""
+        self.charger_modeles()
+        if self.gestion_ml.modeles_svc_disponibles:
+            return
+
+        fichiers_presents = all(
+            os.path.exists(self.gestion_ml.chemin_modele(nom))
+            for nom in ('vectoriseur.joblib', 'modele_basevariante.joblib')
+        )
+        if fichiers_presents:
+            raise RuntimeError(
+                "Les fichiers de modèles existent mais n'ont pas pu être chargés. "
+                "Supprimez-les et relancez le traitement pour tenter une reconstruction."
+            )
+
+        try:
+            self.gestion_ml.creer_modeles()
+            self.charger_modeles()
+        except Exception as e:
+            raise RuntimeError(
+                "Impossible de créer les modèles de classification. "
+                f"Vérifiez les fichiers dans le dossier 'modeles'. Détail: {e}"
+            ) from e
+
+        if not self.gestion_ml.modeles_svc_disponibles:
+            raise RuntimeError(
+                "Les modèles n'ont pas été créés correctement. "
+                "Vérifiez l'état du dossier 'modeles'."
+            )
 
     def extraire_caracteristiques(self, texte, siret=None):
         """Extrait toutes les caractéristiques du produit"""
@@ -902,25 +607,6 @@ class ClassificateurProduits:
             'tva': tva
         }
     
-    def sauvegarder_produit(self, produit, conn):
-        """Sauvegarde un produit en base de données et retourne son id"""
-        curseur = conn.cursor()
-        curseur.execute('''INSERT INTO produits (
-            texte_brut, texte_propre, code_produit, siret, fournisseur, base_variante, aliment, variante,
-            conditionnement, packaging, unite_packaging, origine,
-            poids_unitaire, poids_min, poids_max, unite_poids, poids_total_kg, labels, allergenes, unite_consommation, tva,
-            confiance_basevariante, methode_prediction, a_reviser)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                        (produit['texte_brut'], produit['texte_propre'], produit['code_produit'], produit['siret'],
-                         produit['fournisseur'],
-                         produit['base_variante'], produit['aliment'], produit['variante'],
-                         produit['conditionnement'], produit['packaging'],
-                         produit['unite_packaging'], produit['origine'],
-                         produit['poids_unitaire'], produit['poids_min'],
-                         produit['poids_max'], produit['unite_poids'],
-                         produit['poids_total_kg'], produit['labels'],
-                         produit['allergenes'],
-                         produit['unite_consommation'], produit['tva'],
-                         produit['confiance_basevariante'], produit['methode_prediction'],
-                         produit['a_reviser']))
-        return curseur.lastrowid
+    def sauvegarder_produit(self, produit, commit=True):
+        """Sauvegarde un produit via la couche de persistance et retourne son id"""
+        return self.data_service.inserer_produit(produit, commit=commit)
