@@ -70,6 +70,7 @@ class ClassificateurProduits:
         """Charge les modèles via la couche ML."""
         self.gestion_ml.charger_modeles()
 
+    # TODO : supprimer cette fonction si n'est plus nécessaire :
     def predire_avec_methode_cosine(self, texte):
         """Prédiction TF-IDF Cosine, déléguée à la couche ML.
         Retourne: (prediction, score_confiance)"""
@@ -85,7 +86,6 @@ class ClassificateurProduits:
         return nettoyer_texte(texte)
 
     def attribuer_aliment_et_variante(self, texte):
-        # TODO : utiliser la méthode hybride pour determiner la basevariante, et ensuite attribuer aliment et variante
         basevariante, score_confiance, methode = self.predire_avec_methode_hybride(texte)
         basevariante = basevariante.lower()
 
@@ -548,6 +548,7 @@ class ClassificateurProduits:
     def preparer_modeles(self):
         """S'assure que les modèles de classification sont disponibles.
         L'entraînement n'est déclenché que si aucun fichier de modèle n'est présent."""
+        # TODO : insérer aussi if self.gestion_ml.modeles_cosine_disponibles
         self.charger_modeles()
         if self.gestion_ml.modeles_svc_disponibles:
             return
