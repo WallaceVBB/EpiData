@@ -1,6 +1,6 @@
-"""Test complet du pipeline EpiData, ENTRAÎNEMENT ML INCLUS.
+"""Test complet du pipeline EpiData.
 
-À l'inverse de `tests/smoke_test.py` (rapide, sans entraînement), ce script exerce la
+À l'inverse de `tests/smoke_smalltest.py` (rapide, sans entraînement), ce script exerce la
 chaîne complète : base d'entraînement → entraînement réel des modèles
 (`TfidfVectorizer` + `CalibratedClassifierCV(LinearSVC)`) → inférence → classification
 d'un CSV → persistance → mise à jour de la base d'entraînement.
