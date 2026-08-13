@@ -50,7 +50,7 @@ The `.ui` files are XML-based Qt Designer definitions and are loaded dynamically
 
 ### Testing without ML training
 
-Training is expensive and must never run during development checks. `tests/smoke_test.py` validates the layering (imports, schema, CRUD, cosine inference) using tiny fake `.joblib` artifacts and a guard that fails if `creer_modeles`, `recreer_modeles`, or `classifier_produits` is called.
+Training is expensive and must never run during development checks. `tests/smoke_test_small.py` validates the layering (imports, schema, CRUD, cosine inference) using tiny fake `.joblib` artifacts and a guard that fails if `creer_modeles`, `recreer_modeles`, or `classifier_produits` is called.
 
 `tests/full_test.py` is the opposite: a manually launched end-to-end run that *does* train the models (training database → `creer_modeles` → inference → CSV classification → persistence → `maj_bd_entrainement`). Both scripts write to a temporary `EPIDATA_USER_DIR`, so the repository's models and databases are left untouched.
 
