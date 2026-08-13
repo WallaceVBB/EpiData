@@ -1,0 +1,276 @@
+"""Test complet du pipeline EpiData.
+
+À l'inverse de `tests/smoke_smalltest.py` (rapide, sans entraînement), ce script exerce la
+chaîne complète : base d'entraînement → entraînement réel des modèles
+(`TfidfVectorizer` + `CalibratedClassifierCV(LinearSVC)`) → inférence → classification
+d'un CSV → persistance → mise à jour de la base d'entraînement.
+
+L'entraînement est coûteux (plusieurs minutes et plusieurs Go de RAM selon la taille de
+`donnees/pt_base.csv`) : à lancer manuellement, jamais dans une boucle de développement.
+
+Par défaut, tout est écrit dans un répertoire temporaire (`EPIDATA_USER_DIR`), donc ni
+les modèles ni les bases du dépôt ne sont modifiés.
+
+Exemples :
+    python tests/full_test.py
+    python tests/full_test.py --csv mon_fichier.csv --lignes 200
+    python tests/full_test.py --user-dir ~/epidata_test --garder
+    python tests/full_test.py --recreer          # force la reconstruction des modèles
+"""
+
+import argparse
+import os
+import shutil
+import sqlite3
+import sys
+import tempfile
+import time
+
+RACINE_PROJET = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if RACINE_PROJET not in sys.path:
+    sys.path.insert(0, RACINE_PROJET)
+
+
+def analyser_arguments():
+    analyseur = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    analyseur.add_argument(
+        "--user-dir",
+        default=None,
+        help="Répertoire de données à utiliser (par défaut : un répertoire temporaire supprimé à la fin).",
+    )
+    analyseur.add_argument(
+        "--csv",
+        default=None,
+        help="CSV à classifier (colonne 'designation' obligatoire). Par défaut : un CSV généré depuis donnees/pt_base.csv.",
+    )
+    analyseur.add_argument(
+        "--lignes",
+        type=int,
+        default=50,
+        help="Nombre de désignations du CSV généré automatiquement (défaut : 50).",
+    )
+    analyseur.add_argument(
+        "--recreer",
+        action="store_true",
+        help="Utilise recreer_modeles() (supprime les .joblib existants) au lieu de creer_modeles().",
+    )
+    analyseur.add_argument(
+        "--garder",
+        action="store_true",
+        help="Conserve le répertoire de données à la fin (implicite avec --user-dir).",
+    )
+    return analyseur.parse_args()
+
+
+ARGUMENTS = analyser_arguments()
+
+# Le répertoire de données doit être choisi AVANT l'import des modules de l'application :
+# utils.py résout tous les chemins à l'import.
+REPERTOIRE_TEMPORAIRE = None
+if ARGUMENTS.user_dir:
+    REPERTOIRE_DONNEES = os.path.abspath(os.path.expanduser(ARGUMENTS.user_dir))
+    os.makedirs(REPERTOIRE_DONNEES, exist_ok=True)
+else:
+    REPERTOIRE_TEMPORAIRE = tempfile.mkdtemp(prefix="epidata_full_")
+    REPERTOIRE_DONNEES = REPERTOIRE_TEMPORAIRE
+os.environ["EPIDATA_USER_DIR"] = REPERTOIRE_DONNEES
+
+import pandas as pd  # noqa: E402
+
+import utils  # noqa: E402
+from data_processing import ClassificateurProduits  # noqa: E402
+from gestion_ml import GestionML  # noqa: E402
+from services import DataService  # noqa: E402
+
+DESIGNATIONS_SECOURS = [
+    "TOMATE GRAPPE FRANCE CAT1 5KG",
+    "YAOURT NATURE BIO 4X125G",
+    "PAIN COMPLET TRANCHE 500G",
+    "FILET DE POULET FRAIS 2KG",
+    "HARICOTS VERTS EXTRA FINS BOITE 4/4",
+]
+
+
+def verifier(condition, message):
+    if not condition:
+        raise AssertionError(message)
+    print(f"  ok - {message}")
+
+
+def etape(numero, titre):
+    print(f"\n{numero}. {titre}")
+
+
+def preparer_csv_entree():
+    """Retourne le chemin du CSV à classifier, en le générant si nécessaire."""
+    if ARGUMENTS.csv:
+        chemin = os.path.abspath(os.path.expanduser(ARGUMENTS.csv))
+        verifier(os.path.exists(chemin), f"le CSV fourni existe : {chemin}")
+        return chemin
+
+    pt_base = utils.ressource_path(os.path.join("donnees", "pt_base.csv"))
+    verifier(os.path.exists(pt_base), "donnees/pt_base.csv est disponible pour générer un CSV de test")
+
+    df = pd.read_csv(pt_base, dtype=str).dropna(subset=["designation"])
+    designations = df["designation"].head(ARGUMENTS.lignes).tolist() or DESIGNATIONS_SECOURS
+
+    chemin = os.path.join(REPERTOIRE_DONNEES, "csv_de_test.csv")
+    pd.DataFrame({
+        "designation": designations,
+        "code_produit": [f"TEST-{index:05d}" for index in range(len(designations))],
+    }).to_csv(chemin, index=False)
+    verifier(True, f"CSV de test généré ({len(designations)} lignes) : {chemin}")
+    return chemin
+
+
+def etape_base_donnees():
+    etape(1, "Initialisation de la persistance")
+    data_service = DataService()
+    verifier(data_service.conn is not None, f"base de produits ouverte : {data_service.bd_pt}")
+
+    curseur = data_service.conn.cursor()
+    curseur.execute("PRAGMA table_info(produits)")
+    colonnes = [ligne[1] for ligne in curseur.fetchall()]
+    verifier("methode_prediction" in colonnes, "la table produits contient methode_prediction")
+    return data_service
+
+
+def etape_base_entrainement(gestion_ml):
+    etape(2, "Préparation de la base d'entraînement")
+    gestion_ml.preparer_bd_entrainement()
+    verifier(os.path.exists(gestion_ml.bd_entrainement_path), f"base d'entraînement présente : {gestion_ml.bd_entrainement_path}")
+
+    with sqlite3.connect(gestion_ml.bd_entrainement_path) as conn:
+        nombre_lignes = conn.execute("SELECT COUNT(*) FROM entrainement").fetchone()[0]
+        nombre_classes = conn.execute("SELECT COUNT(DISTINCT base_variante) FROM entrainement").fetchone()[0]
+    verifier(nombre_lignes > 0, f"la base d'entraînement contient {nombre_lignes} lignes")
+    verifier(nombre_classes > 1, f"la base d'entraînement contient {nombre_classes} base_variantes distinctes")
+
+
+def etape_entrainement(gestion_ml):
+    etape(3, "Entraînement réel des modèles (opération longue)")
+    debut = time.time()
+    if ARGUMENTS.recreer:
+        gestion_ml.recreer_modeles()
+    else:
+        gestion_ml.creer_modeles()
+    duree = time.time() - debut
+    print(f"  entraînement terminé en {duree:.1f}s")
+
+    for nom in GestionML.NOMS_MODELES:
+        chemin = gestion_ml.chemin_modele(nom)
+        verifier(os.path.exists(chemin), f"{nom} écrit ({os.path.getsize(chemin) / 1024:.0f} Ko)")
+
+
+def etape_inference(gestion_ml):
+    etape(4, "Inférence avec les modèles fraîchement entraînés")
+    gestion_ml.vectoriseur = None
+    gestion_ml.modele_basevariante = None
+    gestion_ml.vectoriseur_tfidf_cosine = None
+    gestion_ml.donnees_basevariante_cosine = None
+    gestion_ml.charger_modeles()
+    verifier(gestion_ml.modeles_svc_disponibles, "les modèles LinearSVC se rechargent depuis le disque")
+    verifier(gestion_ml.modeles_cosine_disponibles, "les modèles TF-IDF Cosine se rechargent depuis le disque")
+
+    texte = DESIGNATIONS_SECOURS[0]
+    prediction_svc, score_svc = gestion_ml.predire_avec_svc(texte)
+    verifier(prediction_svc is not None and 0.0 <= score_svc <= 1.0, f"prédiction LinearSVC : {prediction_svc} ({score_svc:.2%})")
+
+    prediction_cosine, score_cosine = gestion_ml.predire_avec_cosine_similarity(texte)
+    verifier(prediction_cosine is not None and 0.0 <= score_cosine <= 1.0, f"prédiction cosinus : {prediction_cosine} ({score_cosine:.2%})")
+
+    prediction, score, methode = gestion_ml.predire_avec_methode_hybride(texte)
+    verifier(methode in ("LinearSVC", "TF-IDF_Cosine"), f"prédiction hybride : {prediction} ({score:.2%}) via {methode}")
+
+
+def etape_classification(data_service, gestion_ml, chemin_csv):
+    etape(5, "Classification d'un CSV de bout en bout")
+    classificateur = ClassificateurProduits(data_service=data_service, gestion_ml=gestion_ml)
+
+    messages = []
+    resultats = classificateur.classifier_produits(
+        chemin_csv,
+        progress_callback=lambda progression, message: messages.append((progression, message)),
+    )
+    verifier(isinstance(resultats, pd.DataFrame) and not resultats.empty, f"{len(resultats)} produits classifiés")
+    verifier(bool(messages) and messages[-1][0] == 100, "le callback de progression atteint 100%")
+
+    colonnes_attendues = {'base_variante', 'confiance_basevariante', 'methode_prediction', 'a_reviser'}
+    verifier(colonnes_attendues.issubset(resultats.columns), "les colonnes attendues sont présentes dans le résultat")
+    verifier(resultats['id'].notna().all(), "chaque produit classifié a un identifiant en base")
+
+    a_reviser = int(resultats['a_reviser'].sum())
+    print(f"  info - {a_reviser}/{len(resultats)} produits marqués à réviser (confiance < 70%)")
+    print(f"  info - méthodes utilisées : {resultats['methode_prediction'].value_counts().to_dict()}")
+    return resultats
+
+
+def etape_persistance(data_service, resultats):
+    etape(6, "Persistance et réutilisation de la base de connaissance")
+    premier = resultats.iloc[0]
+    en_base = data_service.obtenir_produit_par_texte_brut(premier['texte_brut'])
+    verifier(en_base is not None, "le premier produit classifié est bien en base")
+    verifier(en_base['base_variante'] == premier['base_variante'], "la base_variante persistée correspond au résultat")
+    verifier(en_base['methode_prediction'] == premier['methode_prediction'], "la methode_prediction est persistée")
+
+    produits_en_base = data_service.obtenir_produits()
+    verifier(len(produits_en_base) == len(resultats), f"{len(produits_en_base)} produits en base après le premier passage")
+
+
+def etape_second_passage(data_service, gestion_ml, chemin_csv, resultats):
+    etape(7, "Second passage : les produits connus ne sont pas re-classifiés")
+    classificateur = ClassificateurProduits(data_service=data_service, gestion_ml=gestion_ml)
+    debut = time.time()
+    resultats_bis = classificateur.classifier_produits(chemin_csv)
+    duree = time.time() - debut
+    print(f"  second passage en {duree:.1f}s")
+
+    verifier(len(resultats_bis) == len(resultats), "le second passage retourne le même nombre de lignes")
+    verifier(len(data_service.obtenir_produits()) == len(resultats), "aucun doublon n'est inséré en base")
+
+
+def etape_maj_entrainement(data_service):
+    etape(8, "Mise à jour de la base d'entraînement depuis les produits traités")
+    resultat = data_service.maj_bd_entrainement()
+    print(f"  info - maj_bd_entrainement a retourné {resultat} (False si aucun produit ne dépasse le seuil de confiance)")
+
+
+def main():
+    print(f"Répertoire de données : {REPERTOIRE_DONNEES}")
+    print("ATTENTION : ce test entraîne réellement les modèles ML, cela peut prendre plusieurs minutes.\n")
+
+    data_service = None
+    code_sortie = 0
+    try:
+        chemin_csv = preparer_csv_entree()
+        data_service = etape_base_donnees()
+        gestion_ml = GestionML(data_service=data_service)
+
+        etape_base_entrainement(gestion_ml)
+        etape_entrainement(gestion_ml)
+        etape_inference(gestion_ml)
+        resultats = etape_classification(data_service, gestion_ml, chemin_csv)
+        etape_persistance(data_service, resultats)
+        etape_second_passage(data_service, gestion_ml, chemin_csv, resultats)
+        etape_maj_entrainement(data_service)
+
+        print("\nTest complet terminé avec succès.")
+    except AssertionError as erreur:
+        print(f"\nÉCHEC : {erreur}")
+        code_sortie = 1
+    except Exception as erreur:
+        print(f"\nERREUR : {type(erreur).__name__}: {erreur}")
+        code_sortie = 1
+    finally:
+        if data_service is not None:
+            data_service.fermer()
+        if REPERTOIRE_TEMPORAIRE and not ARGUMENTS.garder:
+            shutil.rmtree(REPERTOIRE_TEMPORAIRE, ignore_errors=True)
+        else:
+            print(f"Artefacts conservés dans : {REPERTOIRE_DONNEES}")
+
+    return code_sortie
+
+
+if __name__ == "__main__":
+    sys.exit(main())
