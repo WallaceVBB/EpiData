@@ -90,12 +90,12 @@ class TraitementNavigation:
                 results_page.b_Autre_Fichier.clicked.connect(self.on_autre_fichier)
 
     def on_traitement_complet(self):
-        # TODO : accepter CSV ou Excel, et détecter automatiquement le séparateur pour CSV
         file_path, _ = QFileDialog.getOpenFileName(
             self.page,
             "Sélectionner un fichier CSV",
+            "Sélectionner un fichier CSV ou Excel",
             "",
-            "Fichiers CSV (*.csv);;Tous les fichiers (*)"
+            "Fichiers CSV ou Excel (*.csv *.xls *.xlsx);;Fichiers CSV (*.csv);;Fichiers Excel (*.xls *.xlsx);;Tous les fichiers (*)"
         )
         if not file_path:
             return

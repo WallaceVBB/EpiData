@@ -393,8 +393,16 @@ class ClassificateurProduits:
             self.data_service.creer_bd_pt()  # Créer la base de connaissance si elle n'existe pas
             resultats = []  # Liste pour stocker les résultats
 
-            # Lire le fichier CSV
-            df = pd.read_csv(fichier_entree, dtype=str)
+            # Lire le fichier CSV ou Excel
+            _, ext = os.path.splitext(fichier_entree)
+            ext = ext.lower()
+            if ext == '.csv':
+                df = pd.read_csv(fichier_entree, dtype=str)
+            elif ext in ['.xls', '.xlsx']:
+                df = pd.read_excel(fichier_entree, dtype=str)
+            else:
+                raise ValueError("Le fichier doit être au format CSV ou Excel (.csv, .xls, .xlsx).")
+
 
             # Normaliser les noms de colonnes (ex: 'DESIGNATION' → 'designation')
             df.columns = df.columns.str.lower()
