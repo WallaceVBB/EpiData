@@ -22,10 +22,10 @@ The project is actively under development. Prefer small, coherent changes that p
 - `app.py` — application lifecycle and high-level GUI orchestration.
 - `data_processing.py` — product processing, normalization, and classification.
 - `gestion_ml.py` — ML training and inference.
-- `services.py` — application services, persistence, database access, and model management.
+- `services.py` — application services and persistence (owner of all database access).
 - `navigation/` — GUI workflow controllers.
 - `gui/` — Qt Designer `.ui` files.
-- `extrateur_facture/` — PDF invoice extraction.
+- `extracteur_facture/` — PDF invoice extraction.
 - `parametres/` — configuration and reference CSVs.
 - `donnees/` — seed/reference data.
 - `modeles/` — serialized ML models and vectorizers.
@@ -137,7 +137,7 @@ Current extractors include:
 - generic invoice extraction;
 - JARDIMED-specific extraction.
 
-Relevant code is in `extrateur_facture/` and `navigation/n_extracteur_factures.py`.
+Relevant code is in `extracteur_facture/` and `navigation/n_extracteur_factures.py`.
 
 When adding a supplier, prefer extending the extraction architecture rather than adding supplier-specific conditions to generic extraction logic.
 

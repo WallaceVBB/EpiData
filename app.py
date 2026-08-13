@@ -16,12 +16,18 @@ from PySide6.QtWidgets import (
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_extracteur_factures import FactureNavigation
 from services import DataService
-from utils import console, GUI_DIR, NAVIGATION_DIR
+from utils import console, GUI_DIR, NAVIGATION_DIR, copier_fichier_ressource_vers_utilisateur
 
 class Application:
     def __init__(self):
         # Création de l'application Qt
         self.app = QApplication(sys.argv)
+
+        # Copie des ressources vers le dossier utilisateur lors de la première exécution
+        copier_fichier_ressource_vers_utilisateur()
+
+        # Services applicatifs (persistance et données de référence)
+        self.data_service = DataService(app=self)
 
         # Chargement de la fenêtre principale
         self.window = self.load_gui("mainwindow.ui")
@@ -36,12 +42,14 @@ class Application:
         self.traitement_navigation = TraitementNavigation(
             self.pages["traitement_produits"],
             self.show_page,
-            self.pages
+            self.pages,
+            data_service=self.data_service
         )
         self.facture_navigation = FactureNavigation(
             self.pages["convertir_pdf"],
             self.show_page,
-            self.pages
+            self.pages,
+            data_service=self.data_service
         )
 
         # Configuration de la navigation

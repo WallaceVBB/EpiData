@@ -1,10 +1,12 @@
 ### Explications du fichier
-# Ce fichier gère les chemins et répertoires utilisés par l'application.
+# Ce fichier gère les chemins et répertoires utilisés par l'application,
+# ainsi que quelques utilitaires texte partagés par les autres couches.
 
 ### Bibliothèque
 import os
-import sys
+import re
 import shutil
+import sys
 import platform
 from rich.console import Console
 
@@ -13,17 +15,44 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 ### Code
 
-# Déterminer le répertoire utilisateur en fonction de la plateforme
-# TODO: Enlever les commentaires à la fin du développement pour utiliser le vrai répertoire utilisateur selon la plateforme.
-'''if platform.system() == "Windows":
-    USER_APP_DIR = os.path.expanduser("~\\AppData\\Local\\Cantine-Numerique")
-elif platform.system() == "Darwin":  # macOS
-    USER_APP_DIR = os.path.expanduser("~/Library/Application Support/Cantine-Numerique")
-else:  # Linux
-    USER_APP_DIR = os.path.expanduser("~/.local/share/Cantine-Numerique")'''
+# Nom du sous-dossier de l'application dans le répertoire de données de l'utilisateur
+NOM_APPLICATION = "EpiData"
 
-# TODO: Utiliser pendant dévéloppement :
-USER_APP_DIR = os.path.dirname(os.path.abspath(__file__)) # répertoire utilisateur pour stocker les fichiers de l'application
+# Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
+VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
+
+
+def _est_empaquete():
+    """Indique si l'application est exécutée depuis un exécutable PyInstaller."""
+    return getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS')
+
+
+def _repertoire_donnees_utilisateur():
+    """Répertoire de données de l'utilisateur, selon la plateforme."""
+    if platform.system() == "Windows":
+        base = os.environ.get("LOCALAPPDATA") or os.path.expanduser(os.path.join("~", "AppData", "Local"))
+    elif platform.system() == "Darwin":  # macOS
+        base = os.path.expanduser(os.path.join("~", "Library", "Application Support"))
+    else:  # Linux et autres
+        base = os.environ.get("XDG_DATA_HOME") or os.path.expanduser(os.path.join("~", ".local", "share"))
+    return os.path.join(base, NOM_APPLICATION)
+
+
+def _determiner_user_app_dir():
+    """Détermine le répertoire de l'application :
+    - variable d'environnement si elle est définie (tests, déploiements particuliers) ;
+    - répertoire de données de l'utilisateur quand l'application est empaquetée ;
+    - répertoire du projet en développement.
+    """
+    repertoire_force = os.environ.get(VARIABLE_ENV_USER_DIR)
+    if repertoire_force:
+        return os.path.abspath(os.path.expanduser(repertoire_force))
+    if _est_empaquete():
+        return _repertoire_donnees_utilisateur()
+    return os.path.dirname(os.path.abspath(__file__))
+
+
+USER_APP_DIR = _determiner_user_app_dir() # répertoire utilisateur pour stocker les fichiers de l'application
 
 # Définir les chemins vers les sous-dossiers et fichiers
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
@@ -33,7 +62,19 @@ NAVIGATION_DIR = os.path.join(USER_APP_DIR, "navigation") # sous-dossier pour le
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
-BD_PT = os.path.join(BD_DIR, "bd_produits.db") # chemin vers la base de données des produits traités
+BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des produits traités
+
+# Fichiers de ressources copiés vers le dossier utilisateur au premier lancement
+FICHIERS_RESSOURCES = [
+    ("pt_base.csv", "donnees"),
+    ("categories.csv", "parametres"),
+    ("fournisseurs.csv", "parametres"),
+    ("labels.csv", "parametres"),
+    ("origines.csv", "parametres"),
+    ("poids_moyen_fl.csv", "parametres"),
+    ("traitement_appertises.csv", "parametres"),
+    ("unites_poids.csv", "parametres"),
+]
 
 # Créer les répertoires nécessaires si ils n'existent pas
 os.makedirs(USER_APP_DIR, exist_ok=True)
@@ -65,8 +106,9 @@ def assurer_fichier_utilisateur (nom_fichier, sous_dossier=None):
     chemin_fichier_utilisateur = os.path.join(dossier_utilisateur, nom_fichier)
     chemin_bundle = ressource_path(os.path.join(sous_dossier, nom_fichier) if sous_dossier else nom_fichier)
 
-    if not os.path.exists(chemin_fichier_utilisateur):
-        shutil.copy(chemin_bundle, chemin_fichier_utilisateur)
+    if not os.path.exists(chemin_fichier_utilisateur) and os.path.exists(chemin_bundle):
+        if os.path.abspath(chemin_bundle) != os.path.abspath(chemin_fichier_utilisateur):
+            shutil.copy(chemin_bundle, chemin_fichier_utilisateur)
 
     return chemin_fichier_utilisateur
 
@@ -74,16 +116,12 @@ def copier_fichier_ressource_vers_utilisateur ():
     """"Copie les fichiers nécessaires depuis les ressources de l'application vers le
     dossier utilisateur lors de la première exécution."""
 
-    fichiers_a_copier = [
-        ("pt_base.csv", "donnees"),
-        ("categories.csv", "donnees"),
-        ("produits.csv", "donnees"),
-        ("fournisseurs.csv", "donnees"),
-        ("origines.csv", "donnees"),
-        ("poids_moyen_fl.csv", "donnees"),
-        ("traitement_appertises.csv", "donnees"),
-        ("unites_poids.csv", "donnees"),
-    ] # TODO: ajouter les fichiers CSV et les ui à copier vers le répertoire utilisateur
-
-    for nom_fichier, sous_dossier in fichiers_a_copier:
+    for nom_fichier, sous_dossier in FICHIERS_RESSOURCES:
         assurer_fichier_utilisateur(nom_fichier, sous_dossier)
+
+def nettoyer_texte (texte):
+    """Nettoie et normalise le texte (source unique utilisée par le traitement et le ML)."""
+    texte = str(texte).lower()
+    texte = re.sub(r'[^\w\s-]', '', texte)
+    texte = re.sub(r'\s+', ' ', texte).strip()
+    return texte

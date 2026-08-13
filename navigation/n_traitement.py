@@ -1,29 +1,16 @@
 ﻿# Ce fichier fait le lien entre la GUI et le traitement des produits.
 # Il contient les fonctions appelées par les boutons de la GUI pour lancer le traitement.
 
-import os
-import sqlite3
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QTimer, QThread, Signal, Qt
+from PySide6.QtCore import QTimer, QThread, Signal
 from PySide6.QtGui import QStandardItemModel, QStandardItem
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QHeaderView
 
-import data_processing as dp
 from data_processing import ClassificateurProduits
 from services import DataService
 from utils import BD_PT, console
-
-
-class QtController:
-    """Contrôleur minimal pour remplacer tkinter after() dans data_processing."""
-
-    def __init__(self, data_service=None):
-        self.data_service = data_service
-
-    def after(self, delay, callback):
-        QTimer.singleShot(delay, callback)
 
 
 class TraitementWorker(QThread):
@@ -37,32 +24,16 @@ class TraitementWorker(QThread):
         self.data_service = data_service
 
     def run(self):
-        original_showinfo = dp.messagebox.showinfo
-        original_showerror = dp.messagebox.showerror
         result = {'success': True, 'message': 'Traitement terminé avec succès.'}
         imported_rows = None
-
-        def showinfo(title, message, **kwargs):
-            result['success'] = True
-            result['message'] = message
-
-        def showerror(title, message, **kwargs):
-            result['success'] = False
-            result['message'] = message
 
         def progress_callback(progress, message):
             self.progress_updated.emit(int(progress), message)
 
-        dp.messagebox.showinfo = showinfo
-        dp.messagebox.showerror = showerror
-
         try:
             # Initialisation des services globaux
-            self.data_service = DataService(app=self)
-            classifier = ClassificateurProduits(
-                controller=QtController(data_service=self.data_service),
-                bd_pt=self.bd_pt
-            )
+            self.data_service = DataService(app=self, bd_pt=self.bd_pt)
+            classifier = ClassificateurProduits(data_service=self.data_service)
             self.progress_updated.emit(5, "Création des modèles...")
             imported_df = classifier.classifier_produits(self.file_path, progress_callback=progress_callback)
             if imported_df is None:
@@ -73,9 +44,6 @@ class TraitementWorker(QThread):
             result['success'] = False
             result['message'] = str(exc)
             self.progress_updated.emit(100, f"Erreur: {str(exc)}")
-        finally:
-            dp.messagebox.showinfo = original_showinfo
-            dp.messagebox.showerror = original_showerror
 
         self.finished.emit(result['success'], result['message'], imported_rows)
 
@@ -290,22 +258,27 @@ class TraitementNavigation:
         if answer != QMessageBox.Yes:
             return
 
-        with sqlite3.connect(BD_PT) as conn:
-            cursor = conn.cursor()
-            for _, row in self.current_results_df.iterrows():
-                code_produit = row.get('code_produit')
-                texte_brut = row.get('texte_brut')
-                if pd.notna(code_produit) and str(code_produit).strip() != "":
-                    cursor.execute("DELETE FROM produits WHERE code_produit = ?", (code_produit,))
-                elif pd.notna(texte_brut):
-                    cursor.execute("DELETE FROM produits WHERE texte_brut = ?", (texte_brut,))
-            conn.commit()
+        data_service = self._obtenir_data_service()
+        produits = [
+            {
+                'code_produit': row.get('code_produit') if pd.notna(row.get('code_produit')) else None,
+                'texte_brut': row.get('texte_brut') if pd.notna(row.get('texte_brut')) else None,
+            }
+            for _, row in self.current_results_df.iterrows()
+        ]
+        data_service.supprimer_produits(produits)
 
         QMessageBox.information(self.page, "Suppression", "Les données ont été supprimées de la base.")
         self.current_results_df = pd.DataFrame()
         self._populate_results_table(self.current_results_df)
         if hasattr(self.pages['traitement_resultats'], 'b_Supprimer_Resultats'):
             self.pages['traitement_resultats'].b_Supprimer_Resultats.setEnabled(False)
+
+    def _obtenir_data_service(self):
+        """Retourne le service de persistance, en le créant au besoin."""
+        if self.data_service is None:
+            self.data_service = DataService(bd_pt=BD_PT)
+        return self.data_service
 
     def on_telecharger_excel(self):
         if self.current_results_df is None or self.current_results_df.empty:

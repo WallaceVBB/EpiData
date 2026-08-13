@@ -27,8 +27,8 @@ The interface uses three main UI states:
 
 The main extraction implementations are located in:
 
-- `extrateur_facture/Extracteur Generique.py`
-- `extrateur_facture/Extracteur JARDIMED.py`
+- `extracteur_facture/extracteur_generique.py`
+- `extracteur_facture/extracteur_jardimed.py`
 
 The workflow is coordinated by:
 

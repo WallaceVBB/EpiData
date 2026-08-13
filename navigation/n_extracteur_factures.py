@@ -1,12 +1,18 @@
 # Ce fichier fait le lien entre l'interface graphique et le traitement des factures PDF.
 # Il est utilisé pour lancer le traitement des factures à partir de l'interface graphique.
 
-import importlib.util
 import os
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal, QTimer
 from PySide6.QtWidgets import QFileDialog, QMessageBox
+
+from extracteur_facture import extracteur_generique, extracteur_jardimed
+
+EXTRACTEURS = {
+    "generique": extracteur_generique,
+    "jardimed": extracteur_jardimed,
+}
 
 
 class FactureWorker(QThread):
@@ -56,19 +62,7 @@ class FactureWorker(QThread):
         return len(reader.pages)
 
     def _load_extractor_module(self, extractor_name):
-        base_dir = Path(__file__).resolve().parent.parent / "extrateur_facture"
-        if extractor_name == "generique":
-            module_path = base_dir / "Extracteur Generique.py"
-        else:
-            module_path = base_dir / "Extracteur JARDIMED.py"
-
-        spec = importlib.util.spec_from_file_location(f"extracteur_{extractor_name}", module_path)
-        if spec is None or spec.loader is None:
-            return None
-
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-        return module
+        return EXTRACTEURS.get(extractor_name)
 
 
 class FactureNavigation:

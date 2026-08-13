@@ -9,10 +9,23 @@ EpiData is organized into several functional layers.
 
 ### Data Processing
 
-- `data_processing.py`: Core product-processing logic, including data normalization and ML classification orchestration.
-- `gestion_ml.py`: Machine learning training and inference pipelines.
-- `services.py`: Data persistence, database access, model management, and application-level services.
-- `utils.py`: Filesystem management, resource discovery, and cross-platform path resolution.
+- `data_processing.py`: Core product-processing logic and data normalization. It orchestrates the ML and persistence layers and contains neither raw SQL nor GUI code.
+- `gestion_ml.py`: `GestionML`, the single owner of model loading (`.joblib`), training (`creer_modeles`/`recreer_modeles`), and inference (TF-IDF cosine, LinearSVC, hybrid).
+- `services.py`: `DataService`, the single owner of database access (schema creation, migration, CRUD) and reference CSV loading.
+- `utils.py`: Filesystem management, resource discovery, cross-platform path resolution, and shared helpers such as `nettoyer_texte`.
+
+### Layer dependencies
+
+Dependencies flow in one direction only:
+
+```
+navigation/ → data_processing.py → gestion_ml.py → services.py → utils.py
+```
+
+- `navigation/` never opens a database connection; it calls `DataService` methods.
+- `data_processing.py` writes products through `DataService.inserer_produit` and predicts through `GestionML`.
+- `gestion_ml.py` uses a dedicated `DataService` bound to the training database (`bd_entrainement.db`), separate from the product database (`bd_pt.db`).
+- Text cleaning (`nettoyer_texte`) has a single implementation in `utils.py`; other layers delegate to it.
 
 ### Navigation
 
@@ -33,6 +46,11 @@ The `.ui` files are XML-based Qt Designer definitions and are loaded dynamically
 - `parametres/`: CSV configuration and reference files, including labels, origins, categories, weights, and units.
 - `donnees/`: Seed data and reference CSV files.
 - `modeles/`: Serialized machine learning models and vectorizers.
+- `bases_de_donnees/`: SQLite databases, `bd_pt.db` (processed products) and `bd_entrainement.db` (validated training pairs).
+
+### Testing without ML training
+
+Training is expensive and must never run during development checks. `tests/smoke_test.py` validates the layering (imports, schema, CRUD, cosine inference) using tiny fake `.joblib` artifacts and a guard that fails if `creer_modeles`, `recreer_modeles`, or `classifier_produits` is called.
 
 ---
 
