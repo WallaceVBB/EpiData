@@ -13,6 +13,7 @@ from gestion_ml import GestionML
 from services import DataService
 from utils import ressource_path, nettoyer_texte
 
+# TODO: OPTIMISATION - étudier l'utilisation de re.compile() pour les fonctions regex qui sont aujourd'hui dans les extraire_XXX pour accèlerer le traitement
 
 # Code
 class ClassificateurProduits:
@@ -69,12 +70,6 @@ class ClassificateurProduits:
     def charger_modeles(self):
         """Charge les modèles via la couche ML."""
         self.gestion_ml.charger_modeles()
-
-    # TODO : supprimer cette fonction si n'est plus nécessaire :
-    def predire_avec_methode_cosine(self, texte):
-        """Prédiction TF-IDF Cosine, déléguée à la couche ML.
-        Retourne: (prediction, score_confiance)"""
-        return self.gestion_ml.predire_avec_cosine_similarity(texte)
 
     def predire_avec_methode_hybride(self, texte):
         """Prédiction hybride (TF-IDF Cosine puis LinearSVC), déléguée à la couche ML.
@@ -434,6 +429,7 @@ class ClassificateurProduits:
 
                 resultat = {}
                 # Cherche le produit dans la base_connaissance (d'abord par le code_produit et ensuite par le texte_brut)
+                # TODO: OPTIMISATION - le faire seulement si dans le fichier à traiter il y a une colonne code_produit, sinon sauter cette étape pour tout le traitement, pas produit par produit
                 row = self.data_service.obtenir_produit_par_code_produit(code_produit) if code_produit else None
 
                 # 2. Si pas trouvé, chercher par texte_brut
@@ -475,7 +471,7 @@ class ClassificateurProduits:
                     texte_propre = self.nettoyer_texte(texte_brut)
 
                     # Prédictions avec méthode hybride
-                    pred_basevariante, proba_basevariante, methode_prediction = self.predire_avec_methode_hybride(texte_brut)
+                    pred_basevariante, proba_basevariante, methode_prediction = self.predire_avec_methode_hybride(texte_propre)
 
                     # Caractéristiques supplémentaires
                     caracteristiques = self.extraire_caracteristiques(texte_brut, siret)
@@ -619,3 +615,6 @@ class ClassificateurProduits:
     def sauvegarder_produit(self, produit, commit=True):
         """Sauvegarde un produit via la couche de persistance et retourne son id"""
         return self.data_service.inserer_produit(produit, commit=commit)
+
+    #def appliquer_correction ():
+        # TODO : développer fonction qui va mettre changer a_reviser pour FALSE et est_corrige pour TRUE lors d'une correction dans une revision des résultats et de la BD_PT

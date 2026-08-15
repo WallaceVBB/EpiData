@@ -128,6 +128,7 @@ class DataService:
             except Exception:
                 self.poids_moyen_fl = pd.DataFrame()
 
+    # TODO: OPTIMISATION - créer index's idx_code_produit et idx_texte_brut
     def creer_bd_pt(self, conn=None):
         """Crée les tables nécessaires dans la base de données de produits traités.
         Ce schéma est la source de vérité unique de la table produits."""
@@ -300,10 +301,12 @@ class DataService:
             self.conn.commit()
         return curseur.lastrowid
 
+    # TODO: OPTIMISATION - chercher code_produit par idx_code_produit
     def obtenir_produit_par_code_produit(self, code_produit):
         """Récupère un produit à partir de son code produit."""
         return self._obtenir_produit("code_produit", code_produit)
 
+    # TODO: OPTIMISATION - chercher texte_brut par idx_texte_brut
     def obtenir_produit_par_texte_brut(self, texte_brut):
         """Récupère un produit à partir de sa désignation brute."""
         return self._obtenir_produit("texte_brut", texte_brut)

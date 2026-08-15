@@ -199,11 +199,10 @@ class GestionML:
             if vectoriseur_cosine is None or donnees_cosine is None:
                 return None, 0.0
 
-            texte_propre = self.nettoyer_texte(texte)
-            tfidf_input = vectoriseur_cosine.transform([texte_propre])
+            tfidf_input = vectoriseur_cosine.transform([texte])
 
             # Vectoriser toutes les basevariantes de référence
-            basevariantes = donnees_cosine['base_variantes']
+            basevariantes = donnees_cosine['base_variantes'] # TODO: OPTIMISATION: sortir cette instance de ce boucle pour qu'il ne vectorise pas les basevariantes à chaque produit, mais seulement au début du traitement
             tfidf_reference = vectoriseur_cosine.transform(basevariantes)
 
             # Calculer la similarité cosinus
@@ -257,7 +256,7 @@ class GestionML:
         if not self.modeles_svc_disponibles:
             return None, 0.0
 
-        vecteur = self.vectoriseur.transform([self.nettoyer_texte(texte)])
+        vecteur = self.vectoriseur.transform([texte])
         prediction = self.modele_basevariante.predict(vecteur)[0]
         score_confiance = float(np.max(self.modele_basevariante.predict_proba(vecteur)))
         return prediction, score_confiance
