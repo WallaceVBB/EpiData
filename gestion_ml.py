@@ -50,6 +50,8 @@ class GestionML:
         self.vectoriseur_tfidf_cosine = None
         self.donnees_basevariante_cosine = None
 
+        self._tfidf_reference_cache = None
+
     @staticmethod
     def nettoyer_texte(texte):
         """Nettoie et normalise le texte (implémentation unique dans utils.py)."""
@@ -188,6 +190,24 @@ class GestionML:
             console.print(f"[bold red]✗ Erreur lors de l'entraînement: {e}")
             raise
 
+    def _obtenir_tfidf_reference(self, vectoriseur_cosine, donnees_cosine):
+        """Retourne (basevariantes, tfidf_reference) pour la méthode cosine.
+
+        La matrice TF-IDF des basevariantes de référence ne dépend que du
+        vectoriseur et des données chargés, jamais du texte du produit en
+        cours : on la calcule donc une seule fois puis on la réutilise pour
+        tous les produits suivants, tant que le vectoriseur/les données n'ont
+        pas changé.
+        """
+        cache = self._tfidf_reference_cache
+        if cache is not None and cache[0] is vectoriseur_cosine and cache[1] is donnees_cosine:
+            return cache[2], cache[3]
+
+        basevariantes = donnees_cosine['base_variantes']
+        tfidf_reference = vectoriseur_cosine.transform(basevariantes)
+        self._tfidf_reference_cache = (vectoriseur_cosine, donnees_cosine, basevariantes, tfidf_reference)
+        return basevariantes, tfidf_reference
+
     def predire_avec_cosine_similarity(self, texte, vectoriseur_cosine=None, donnees_cosine=None):
         """
         Prédit la basevariante en utilisant TF-IDF avec similarité cosinus.
@@ -201,9 +221,9 @@ class GestionML:
 
             tfidf_input = vectoriseur_cosine.transform([texte])
 
-            # Vectoriser toutes les basevariantes de référence
-            basevariantes = donnees_cosine['base_variantes'] # TODO: OPTIMISATION: sortir cette instance de ce boucle pour qu'il ne vectorise pas les basevariantes à chaque produit, mais seulement au début du traitement
-            tfidf_reference = vectoriseur_cosine.transform(basevariantes)
+            # Basevariantes de référence : vectorisées une seule fois puis mises en
+            # cache (voir _obtenir_tfidf_reference), au lieu d'être revectorisées à chaque produit.
+            basevariantes, tfidf_reference = self._obtenir_tfidf_reference(vectoriseur_cosine, donnees_cosine)
 
             # Calculer la similarité cosinus
             similarites = cosine_similarity(tfidf_input, tfidf_reference)[0]
