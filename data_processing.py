@@ -13,8 +13,6 @@ from gestion_ml import GestionML
 from services import DataService
 from utils import ressource_path, nettoyer_texte
 
-# TODO: OPTIMISATION - étudier l'utilisation de re.compile() pour les fonctions regex qui sont aujourd'hui dans les extraire_XXX pour accèlerer le traitement
-
 # Code
 class ClassificateurProduits:
     """Classe pour classifier et traiter les produits alimentaires."""
@@ -42,6 +40,17 @@ class ClassificateurProduits:
         # Charger les données depuis le service
         self._charger_donnees_service()
         self._charger_parametres()
+
+        # Patterns regex compilés pour optimisation
+        self._REGEX_POIDS_SPECIAL = re.compile(r'(\d+)[kKgG](\d+)')  # Cas spéciaux comme "2K5" ou "1G5"
+        self._REGEX_POIDS_STANDARD = re.compile(r'(\d+[,.]?\d*)(?:-(\d+[,.]?\d*))?\s?({})')
+        self._REGEX_POIDS_OEUFS = re.compile(r'(43/53|53/63|63/73|\+73)')
+        self._REGEX_PACKAGING_TOTAL = re.compile(r'(?<![\d])(\d+[.,]?\d*)\s*(kg|k|kilogrammes?|l|litres|litre?)', re.IGNORECASE)
+        self._REGEX_PACKAGING_COMPLEXE = re.compile(r'\(?(\d+)\s*[xX*]\s*(\d+[,.]?\d*)\s*(g|kg|ml|l|u|unités?|pièces?|tr|t)?\)?', re.IGNORECASE)
+        self._REGEX_PACKAGING_SIMPLE = re.compile(r'(?<![\w])(\d+)\s*(unités?|pièces?|u|tranches?|barquettes?)\b', re.IGNORECASE)
+        self._REGEX_PACKAGING_XONLY = re.compile(r'[xX*]\s*(\d+)')
+        self._REGEX_ORIGINE = re.compile(r'(?<!\w)({}?)(?!\w)')
+        self._REGEX_LABEL = re.compile(r'(?<!\w)({}?)(?!\w)')
 
     def _charger_donnees_service(self):
         """Charge les données de référence depuis le service de données."""
@@ -139,7 +148,8 @@ class ClassificateurProduits:
                 if not base_variante_clean:
                     continue
 
-                regex_origine = r'(?<!\w)(' + '|'.join(base_variante_clean) + r')(?!\w)'
+                pattern_str = '|'.join(base_variante_clean)
+                regex_origine = self._REGEX_ORIGINE.pattern.format(pattern_str)
 
                 if re.search(regex_origine, texte):
                     return origines
@@ -157,7 +167,8 @@ class ClassificateurProduits:
                 if not labels_clean:
                     continue
 
-                regex_label = r'(?<!\w)(' + '|'.join(labels_clean) + r')(?!\w)'
+                pattern_str = '|'.join(labels_clean)
+                regex_label = self._REGEX_LABEL.pattern.format(pattern_str)
 
                 if re.search(regex_label, texte):
                     labels_trouves.append(label)
@@ -171,7 +182,7 @@ class ClassificateurProduits:
         unites_regex = '|'.join(re.escape(unite) for unite in toutes_unites)
 
         # Cas spéciaux comme "2K5" ou "1G5" (2,5K)....... pas encore prêt, il continue à reconnaître comme 2 kg et 1 g
-        match = re.search(r'(\d+)[kKgG](\d+)', texte)
+        match = self._REGEX_POIDS_SPECIAL.search(texte)
         if match:
             poids = float(f"{match.group(1)}.{match.group(2)}")
             unite = 'kg' if match.group(0)[-2].lower() == 'k' else 'g'
@@ -249,7 +260,7 @@ class ClassificateurProduits:
                 break
 
         # 1. PRIORITÉ : formats totaux (ex: "2kg", "3.5L", "1,5l")
-        match_total = re.search(r'(?<![\d])(\d+[.,]?\d*)\s*(kg|k|kilogrammes?|l|litres|litre?)', texte_lower)
+        match_total = self._REGEX_PACKAGING_TOTAL.search(texte_lower)
         if match_total:
             packaging = float(match_total.group(1).replace(',', '.'))
             unite_packaging = match_total.group(2).lower()
@@ -262,24 +273,21 @@ class ClassificateurProduits:
             return conditionnement, packaging, unite_packaging
 
         # 2. Formatos com multiplicação: 4x100g, 10x500ml → unidade = pièce
-        pattern_complexe = re.compile(
-            r'\(?(\d+)\s*[xX*]\s*(\d+[,.]?\d*)\s*(g|kg|ml|l|u|unités?|pièces?|tr|t)?\)?'
-        )
-        match_complexe = pattern_complexe.search(texte_lower)
+        match_complexe = self._REGEX_PACKAGING_COMPLEXE.search(texte_lower)
         if match_complexe:
             packaging = int(match_complexe.group(1))
             unite_packaging = "pièce"
             return conditionnement, packaging, unite_packaging
 
         # 3. Cas simples: "4 unités", "5 paquets"
-        match_simple = re.search(r'(?<![\w])(\d+)\s*(unités?|pièces?|u|tranches?|barquettes?)\b', texte_lower)
+        match_simple = self._REGEX_PACKAGING_SIMPLE.search(texte_lower)
         if match_simple:
             packaging = int(match_simple.group(1))
             unite_packaging = "pièce"
             return conditionnement, packaging, unite_packaging
 
         # 4. Cas restantes: x4, *6
-        match_xonly = re.search(r'[xX*]\s*(\d+)', texte_lower)
+        match_xonly = self._REGEX_PACKAGING_XONLY.search(texte_lower)
         if match_xonly:
             packaging = int(match_xonly.group(1))
             unite_packaging = "pièce"
@@ -422,15 +430,17 @@ class ClassificateurProduits:
 
             produits = df.to_dict(orient='records')
 
+            # Optimisation: vérifier une seule fois si la colonne code_produit existe
+            has_code_produit = 'code_produit' in df.columns
+            
             for i, produit in enumerate(produits):
                 texte_brut = produit.get('designation', '').strip()
-                code_produit = produit.get('code_produit')
+                code_produit = produit.get('code_produit') if has_code_produit else None
                 siret = produit.get('siret')
 
                 resultat = {}
                 # Cherche le produit dans la base_connaissance (d'abord par le code_produit et ensuite par le texte_brut)
-                # TODO: OPTIMISATION - le faire seulement si dans le fichier à traiter il y a une colonne code_produit, sinon sauter cette étape pour tout le traitement, pas produit par produit
-                row = self.data_service.obtenir_produit_par_code_produit(code_produit) if code_produit else None
+                row = self.data_service.obtenir_produit_par_code_produit(code_produit) if has_code_produit and code_produit else None
 
                 # 2. Si pas trouvé, chercher par texte_brut
                 if not row:
@@ -544,9 +554,8 @@ class ClassificateurProduits:
     def preparer_modeles(self):
         """S'assure que les modèles de classification sont disponibles.
         L'entraînement n'est déclenché que si aucun fichier de modèle n'est présent."""
-        # TODO : insérer aussi if self.gestion_ml.modeles_cosine_disponibles
         self.charger_modeles()
-        if self.gestion_ml.modeles_svc_disponibles:
+        if self.gestion_ml.modeles_svc_disponibles and self.gestion_ml.modeles_cosine_disponibles:
             return
 
         fichiers_presents = all(
