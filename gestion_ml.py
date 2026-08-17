@@ -213,30 +213,42 @@ class GestionML:
         Prédit la basevariante en utilisant TF-IDF avec similarité cosinus.
         Retourne le résultat et le score de confiance.
         """
+        return self.predire_avec_cosine_similarity_lot([texte], vectoriseur_cosine, donnees_cosine)[0]
+
+    def predire_avec_cosine_similarity_lot(self, textes, vectoriseur_cosine=None, donnees_cosine=None):
+        """Version par lot de `predire_avec_cosine_similarity`.
+
+        Les textes sont vectorisés en une seule fois (`transform(liste)`) et la
+        similarité cosinus est calculée sur toute la matrice, ce qui évite un
+        appel scikit-learn par produit.
+        Retourne une liste de tuples (prediction, score_confiance).
+        """
+        if not textes:
+            return []
         try:
             vectoriseur_cosine = vectoriseur_cosine if vectoriseur_cosine is not None else self.vectoriseur_tfidf_cosine
             donnees_cosine = donnees_cosine if donnees_cosine is not None else self.donnees_basevariante_cosine
             if vectoriseur_cosine is None or donnees_cosine is None:
-                return None, 0.0
+                return [(None, 0.0)] * len(textes)
 
-            tfidf_input = vectoriseur_cosine.transform([texte])
+            tfidf_input = vectoriseur_cosine.transform(textes)
 
             # Basevariantes de référence : vectorisées une seule fois puis mises en
             # cache (voir _obtenir_tfidf_reference), au lieu d'être revectorisées à chaque produit.
             basevariantes, tfidf_reference = self._obtenir_tfidf_reference(vectoriseur_cosine, donnees_cosine)
 
             # Calculer la similarité cosinus
-            similarites = cosine_similarity(tfidf_input, tfidf_reference)[0]
+            similarites = cosine_similarity(tfidf_input, tfidf_reference)
 
-            # Obtenir l'index du meilleur résultat
-            meilleur_index = int(np.argmax(similarites))
-            score_confiance = float(similarites[meilleur_index])
-            prediction = basevariantes[meilleur_index]
-
-            return prediction, score_confiance
+            # Obtenir l'index du meilleur résultat pour chaque texte
+            meilleurs_index = np.argmax(similarites, axis=1)
+            return [
+                (basevariantes[int(index)], float(similarites[ligne, index]))
+                for ligne, index in enumerate(meilleurs_index)
+            ]
         except Exception as e:
             console.print(f"[yellow]Erreur dans la méthode cosine: {e}")
-            return None, 0.0
+            return [(None, 0.0)] * len(textes)
 
     def predire_avec_methode_hybride(self, texte):
         """
@@ -249,18 +261,68 @@ class GestionML:
 
         Retourne: (prediction, score_confiance, methode_utilisee)
         """
-        # Étape 1: Essayer Méthode 2 (TF-IDF Cosine)
-        pred_cosine, proba_cosine = self.predire_avec_cosine_similarity(texte)
+        return self.predire_avec_methode_hybride_lot([texte])[0]
+
+    def predire_avec_methode_hybride_lot(self, textes):
+        """Version par lot de `predire_avec_methode_hybride`.
+
+        La logique de décision est identique à la version unitaire ; seules les
+        inférences sont regroupées : une passe cosine pour tous les textes, puis
+        une passe LinearSVC pour les seuls textes dont le score cosine est
+        inférieur à 0.95.
+        Retourne une liste de tuples (prediction, score_confiance, methode_utilisee).
+        """
+        if not textes:
+            return []
+
+        # Étape 1: Essayer Méthode 2 (TF-IDF Cosine) pour tout le lot
+        resultats_cosine = self.predire_avec_cosine_similarity_lot(textes)
+
+        resultats = [None] * len(textes)
+        index_svc = []
+        for i, (pred_cosine, proba_cosine) in enumerate(resultats_cosine):
+            # Étape 2: Si M2 >= 95%, l'utiliser directement (aucun appel LinearSVC)
+            if proba_cosine >= 0.95 or not self.modeles_svc_disponibles:
+                resultats[i] = self._decider_hybride(resultats_cosine[i], (None, 0.0))
+            else:
+                index_svc.append(i)
+
+        if not index_svc:
+            return resultats
+
+        # Étapes 3 à 5: LinearSVC sur les seuls textes restants
+        resultats_svc = self.predire_avec_svc_lot([textes[i] for i in index_svc])
+        for i, resultat_svc in zip(index_svc, resultats_svc):
+            resultats[i] = self._decider_hybride(resultats_cosine[i], resultat_svc)
+
+        return resultats
+
+    def predire_hybride_et_svc_lot(self, textes):
+        """Prédit par lot la basevariante hybride ET la basevariante LinearSVC.
+
+        Les deux prédictions partagent la même inférence LinearSVC, ce qui évite
+        de repasser le même texte dans le modèle pour chaque usage.
+        Retourne une liste de tuples ((pred, score, methode), (pred_svc, score_svc)).
+        """
+        if not textes:
+            return []
+
+        resultats_cosine = self.predire_avec_cosine_similarity_lot(textes)
+        resultats_svc = self.predire_avec_svc_lot(textes)
+        return [
+            (self._decider_hybride(resultat_cosine, resultat_svc), resultat_svc)
+            for resultat_cosine, resultat_svc in zip(resultats_cosine, resultats_svc)
+        ]
+
+    def _decider_hybride(self, resultat_cosine, resultat_svc):
+        """Applique les règles de décision hybrides à des prédictions déjà calculées."""
+        pred_cosine, proba_cosine = resultat_cosine
 
         # Étape 2: Si M2 >= 95%, l'utiliser directement
-        if proba_cosine >= 0.95:
+        if proba_cosine >= 0.95 or not self.modeles_svc_disponibles:
             return pred_cosine, proba_cosine, "TF-IDF_Cosine"
 
-        if not self.modeles_svc_disponibles:
-            return pred_cosine, proba_cosine, "TF-IDF_Cosine"
-
-        # Étape 3: Essayer Méthode 1 (LinearSVC)
-        pred_svc, proba_svc = self.predire_avec_svc(texte)
+        pred_svc, proba_svc = resultat_svc
 
         # Étape 4: Si M1 >= 70%, l'utiliser directement
         if proba_svc >= 0.70:
@@ -273,10 +335,20 @@ class GestionML:
 
     def predire_avec_svc(self, texte):
         """Prédit la basevariante avec le modèle LinearSVC calibré."""
-        if not self.modeles_svc_disponibles:
-            return None, 0.0
+        return self.predire_avec_svc_lot([texte])[0]
 
-        vecteur = self.vectoriseur.transform([texte])
-        prediction = self.modele_basevariante.predict(vecteur)[0]
-        score_confiance = float(np.max(self.modele_basevariante.predict_proba(vecteur)))
-        return prediction, score_confiance
+    def predire_avec_svc_lot(self, textes):
+        """Version par lot de `predire_avec_svc` : une seule vectorisation et une
+        seule inférence pour l'ensemble des textes."""
+        if not textes:
+            return []
+        if not self.modeles_svc_disponibles:
+            return [(None, 0.0)] * len(textes)
+
+        vecteurs = self.vectoriseur.transform(textes)
+        predictions = self.modele_basevariante.predict(vecteurs)
+        probabilites = self.modele_basevariante.predict_proba(vecteurs)
+        return [
+            (predictions[i], float(np.max(probabilites[i])))
+            for i in range(len(textes))
+        ]
