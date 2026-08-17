@@ -106,7 +106,7 @@ class TraitementNavigation:
         self._last_progress_message = ''
         self._show_loading_page()
 
-        # TODO : lancer data_service seulement lors du premier traitement, et le réutiliser pour les traitements suivants
+        # TODO : OPTIMISATION - lancer data_service seulement lors du premier traitement, et le réutiliser pour les traitements suivants
         self.worker = TraitementWorker(file_path, BD_PT, data_service=self.data_service)
         self.worker.finished.connect(self.on_finished)
         self.worker.progress_updated.connect(self.on_progress_update)
@@ -220,6 +220,11 @@ class TraitementNavigation:
         if not results_page or not hasattr(results_page, 'Tableau_Results'):
             return
 
+        # TODO: ce tableau doit être editable, on doit pouvoir modifier les informations de chaque cellules, filtrer le tableau, le reorganiser (en ordre) et permettre la modification de base_variente exclusivement avec les valeurs presentes dans parametres/categories.csv (DataService.charger_csvs)
+        # TODO: cacher la colonne  'a_reviser' du tableau, ces infos doivent rester seulement en backend
+        # TODO: est_corrige doit etre une case à cocher dans la premiere colonne
+        # TODO: une fois une information changée -> a_reviser = FALSE et est_corrige = TRUE (donc est_corrige doit changer automaticament ou par l'utilisateur s'il coche la case)
+        # TODO: mettre en place la mise à jour de produits dans la BD_PT avec services.mettre_a_jour_produit(self, produit_id, donnees)
         table_view = results_page.Tableau_Results
         model = QStandardItemModel()
 

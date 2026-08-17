@@ -3,9 +3,6 @@
 # incluant la connexion à la base de données et le chargement des CSV nécessaires pour le traitement des produits alimentaires.
 # Il contient également les fonctions pour initialiser les bases de données et charger les modèles de machine learning.
 
-## TODO's :
-# Prévoir un module distinct pour le traitement des données et la mise à jour des données.
-
 ## Bibliothèques
 import os
 import sqlite3
@@ -165,6 +162,11 @@ class DataService:
                         est_corrige BOOLEAN DEFAULT 0,
                         date_ajout TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         date_maj TIMESTAMP)''')
+        # TODO: temporaire pendant transition
+        curseur.execute('CREATE INDEX IF NOT EXISTS idx_code_produit ON produits(code_produit)')
+        curseur.execute('CREATE INDEX IF NOT EXISTS idx_texte_brut ON produits(texte_brut)')
+
+        
         conn.commit()
 
     def migrer_bd_si_necessaire(self, conn=None):
