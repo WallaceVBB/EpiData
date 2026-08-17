@@ -5,7 +5,7 @@ s'importent et fonctionnent, en utilisant un répertoire utilisateur temporaire 
 des modèles `.joblib` factices. Toute tentative d'entraînement (`creer_modeles`,
 `recreer_modeles`) ou d'appel à `classifier_produits` fait échouer le test.
 
-Utilisation : python tests/smoke_test.py
+Utilisation : python tests/smoke_small_test.py
 """
 
 import os

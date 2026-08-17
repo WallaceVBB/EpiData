@@ -612,7 +612,7 @@ class ClassificateurProduits:
             'origine': origine,
             'labels': label,
             'allergenes': allergenes,
-            'unite_consommation': unite_consommation,  # verificação: à faire plus tard
+            'unite_consommation': unite_consommation,  # TODO: à faire plus tard
             'tva': tva
         }
     
