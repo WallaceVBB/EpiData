@@ -4,13 +4,230 @@
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QTimer, QThread, Signal
+from PySide6.QtCore import QTimer, QThread, Signal, Qt, QSortFilterProxyModel
 from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtWidgets import QFileDialog, QMessageBox, QHeaderView
+from PySide6.QtWidgets import (
+    QFileDialog, QMessageBox, QHeaderView, QComboBox, QSizePolicy, QStyledItemDelegate,
+)
 
 from data_processing import ClassificateurProduits
 from services import DataService
 from utils import BD_PT, console
+
+# Rôle personnalisé utilisé pour retenir la dernière valeur "connue" d'une cellule,
+# afin de pouvoir détecter une modification réelle (TODO résolu : voir setData).
+ROLE_VALEUR_PRECEDENTE = Qt.ItemDataRole.UserRole + 2
+
+# Nom des widgets de filtre définis dans le .ui de la page traitement_resultats
+# (label_Filtrer, comboBox_Choic_colonnes, lineEdit_Filtre, b_Reset).
+WIDGET_COMBO_COLONNES = 'comboBox_Choic_colonnes'
+WIDGET_CHAMP_FILTRE = 'lineEdit_Filtre'
+WIDGET_BOUTON_RESET = 'b_Reset'
+
+
+class ComboBoxDelegate(QStyledItemDelegate):
+    """Delegate pour afficher un combobox pour les cellules éditables."""
+
+    def __init__(self, items, parent=None):
+        super().__init__(parent)
+        self.items = items
+
+    def createEditor(self, parent, option, index):
+        """Crée un combobox pour éditer la cellule."""
+        combobox = QComboBox(parent)
+        combobox.addItems(self.items)
+        return combobox
+
+    def setEditorData(self, editor, index):
+        """Définit les données du combobox à partir du modèle."""
+        value = index.model().data(index, Qt.ItemDataRole.DisplayRole)
+        if value:
+            index_value = editor.findText(str(value))
+            if index_value >= 0:
+                editor.setCurrentIndex(index_value)
+
+    def setModelData(self, editor, model, index):
+        """Définit les données du modèle à partir du combobox."""
+        model.setData(index, editor.currentText(), Qt.ItemDataRole.EditRole)
+
+
+class TableModelEditablePersonnalise(QStandardItemModel):
+    """Modèle de table personnalisé pour rendre les cellules éditables avec support pour checkbox et combobox."""
+
+    item_changed = Signal(int, int, str)  # row, col, value
+
+    def __init__(self, df, colonnes_visibles, categories_list, parent=None):
+        super().__init__(parent)
+        self.df = df
+        self.colonnes_visibles = colonnes_visibles
+        self.categories_list = categories_list
+        self._populate_model()
+
+    def _populate_model(self):
+        """Remplit le modèle avec les données du DataFrame."""
+        self.setColumnCount(len(self.colonnes_visibles))
+        self.setHorizontalHeaderLabels(self.colonnes_visibles)
+
+        for row_index, (_, row) in enumerate(self.df.iterrows()):
+            for col_index, colonne in enumerate(self.colonnes_visibles):
+                value = row.get(colonne, '')
+
+                if colonne == 'est_corrige':
+                    # Pour est_corrige, créer un item avec checkbox.
+                    # (Bug corrigé : l'ancien code appelait deux fois setCheckable(),
+                    # ce qui désactivait la case au lieu de fixer son état initial.)
+                    valeur_bool = bool(value)
+                    item = QStandardItem()
+                    item.setCheckable(True)
+                    item.setCheckState(Qt.CheckState.Checked if valeur_bool else Qt.CheckState.Unchecked)
+                    item.setData(valeur_bool, ROLE_VALEUR_PRECEDENTE)
+                elif colonne == 'base_variante':
+                    # Pour base_variante, stocker la valeur et marquer comme combobox.
+                    value_str = str(value) if pd.notna(value) else ''
+                    item = QStandardItem(value_str)
+                    item.setEditable(True)
+                    item.setData("combobox", Qt.ItemDataRole.UserRole)
+                    item.setData(value_str, ROLE_VALEUR_PRECEDENTE)
+                else:
+                    # Pour les autres colonnes, créer des items texte éditables.
+                    value_str = str(value) if pd.notna(value) else ''
+                    item = QStandardItem(value_str)
+                    item.setEditable(colonne not in ('id', 'a_reviser'))
+                    item.setData(value_str, ROLE_VALEUR_PRECEDENTE)
+
+                self.setItem(row_index, col_index, item)
+
+    def data(self, index, role=Qt.ItemDataRole.DisplayRole):
+        """Personnalise l'affichage des données."""
+        if not index.isValid():
+            return None
+
+        item = self.item(index.row(), index.column())
+        if item is None:
+            return None
+
+        colonne = self.colonnes_visibles[index.column()] if index.column() < len(self.colonnes_visibles) else ''
+
+        # Pour est_corrige, afficher comme checkbox.
+        if colonne == 'est_corrige':
+            if role == Qt.ItemDataRole.CheckStateRole:
+                return Qt.CheckState.Checked if item.checkState() == Qt.CheckState.Checked else Qt.CheckState.Unchecked
+            elif role == Qt.ItemDataRole.DisplayRole:
+                return None
+            return super().data(index, role)
+
+        return super().data(index, role)
+
+    def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
+        """
+        Gère la modification des données.
+
+        TODO résolu : une ligne n'est signalée comme modifiée (item_changed) que si
+        la valeur a réellement changé par rapport à la dernière valeur connue. Cela
+        évite par exemple qu'ouvrir puis refermer l'éditeur d'une cellule (sans rien
+        changer) ne marque le produit comme "corrigé".
+        """
+        if not index.isValid():
+            return False
+
+        colonne = self.colonnes_visibles[index.column()] if index.column() < len(self.colonnes_visibles) else ''
+        item = self.item(index.row(), index.column())
+
+        a_change = False
+        nouvelle_valeur = None
+
+        if colonne == 'est_corrige' and role == Qt.ItemDataRole.CheckStateRole:
+            nouvelle_valeur = (value == Qt.CheckState.Checked)
+            valeur_precedente = item.data(ROLE_VALEUR_PRECEDENTE) if item else None
+            a_change = bool(valeur_precedente) != nouvelle_valeur
+        elif role == Qt.ItemDataRole.EditRole:
+            nouvelle_valeur = str(value)
+            valeur_precedente = item.data(ROLE_VALEUR_PRECEDENTE) if item else None
+            a_change = str(valeur_precedente) != nouvelle_valeur
+
+        success = super().setData(index, value, role)
+
+        if success and a_change:
+            item = self.item(index.row(), index.column())
+            if item:
+                item.setData(nouvelle_valeur, ROLE_VALEUR_PRECEDENTE)
+            self.item_changed.emit(index.row(), index.column(), str(nouvelle_valeur))
+
+        return success
+
+    def flags(self, index):
+        """Définit les drapeaux pour les éléments du tableau."""
+        if not index.isValid():
+            return Qt.ItemFlag.NoItemFlags
+
+        colonne = self.colonnes_visibles[index.column()] if index.column() < len(self.colonnes_visibles) else ''
+
+        flags = super().flags(index)
+
+        if colonne == 'est_corrige':
+            # est_corrige est une checkbox
+            flags |= Qt.ItemFlag.ItemIsUserCheckable
+            flags &= ~Qt.ItemFlag.ItemIsEditable  # Pas éditable, juste cochable
+        elif colonne in ('id', 'a_reviser'):
+            # Ces colonnes ne sont jamais éditables (défensif : elles sont de toute
+            # façon toujours masquées, voir colonnes_cachees dans _populate_results_table).
+            flags &= ~Qt.ItemFlag.ItemIsEditable
+        else:
+            flags |= Qt.ItemFlag.ItemIsEditable
+
+        return flags
+
+
+class FiltreProduitsProxyModel(QSortFilterProxyModel):
+    """
+    Proxy model permettant de filtrer le tableau de résultats, soit sur une colonne
+    précise, soit sur toutes les colonnes à la fois (recherche globale).
+    Répond au TODO : ajouter des filtres pour faciliter la révision.
+    """
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._filtres_colonnes = {}  # {col_index: texte_filtre_en_minuscule}
+        self._filtre_global = ''
+
+    def definir_filtre_colonne(self, col_index, texte):
+        texte = (texte or '').strip().lower()
+        if texte:
+            self._filtres_colonnes[col_index] = texte
+        else:
+            self._filtres_colonnes.pop(col_index, None)
+        self.invalidateFilter()
+
+    def definir_filtre_global(self, texte):
+        self._filtre_global = (texte or '').strip().lower()
+        self.invalidateFilter()
+
+    def reinitialiser_filtres(self):
+        self._filtres_colonnes.clear()
+        self._filtre_global = ''
+        self.invalidateFilter()
+
+    def filterAcceptsRow(self, source_row, source_parent):
+        model = self.sourceModel()
+        if model is None:
+            return True
+
+        def valeur_colonne(col_index):
+            index = model.index(source_row, col_index, source_parent)
+            valeur = model.data(index, Qt.ItemDataRole.DisplayRole)
+            if valeur is None:
+                valeur = model.data(index, Qt.ItemDataRole.CheckStateRole)
+            return str(valeur).lower() if valeur is not None else ''
+
+        for col_index, texte in self._filtres_colonnes.items():
+            if texte not in valeur_colonne(col_index):
+                return False
+
+        if self._filtre_global:
+            if not any(self._filtre_global in valeur_colonne(c) for c in range(model.columnCount())):
+                return False
+
+        return True
 
 
 class TraitementWorker(QThread):
@@ -62,9 +279,20 @@ class TraitementNavigation:
         self._current_stage = 'creation_modeles'
         self._last_progress_value = 0
         self._last_progress_message = ''
+        # Dictionnaire pour stocker les produits avec leurs IDs
+        self._produits_id_map = {}  # {index_row: {'id': int, 'original_data': dict}}
+        # Charger les catégories disponibles
+        self._categories_list = self._charger_categories()
+        # Flag pour éviter les mises à jour récursives
+        self._updating_cell = False
+        # Modèle source courant (le tableau utilise un proxy de filtrage par-dessus)
+        self._results_model = None
+        self._filtre_proxy = None
+
         self._connect_buttons()
         self._connect_progress_buttons()
         self._connect_results_buttons()
+        self._configurer_redimensionnement()
 
     def _connect_buttons(self):
         if hasattr(self.page, 'Traitement_complet'):
@@ -89,12 +317,47 @@ class TraitementNavigation:
             if hasattr(results_page, 'b_Autre_Fichier'):
                 results_page.b_Autre_Fichier.clicked.connect(self.on_autre_fichier)
 
+    def _configurer_redimensionnement(self):
+        """
+        TODO (partiellement résolu) : la fenêtre ne s'ajuste pas correctement quand on
+        la redimensionne/maximise. Le réglage principal doit être terminé dans Qt
+        Designer/Creator (layouts + politiques de taille "Expanding" sur les widgets
+        parents concernés). Ce qui suit prépare la partie applicable depuis le code :
+        politiques de taille sur la page et le tableau, et étirement des colonnes.
+        """
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page:
+            return
+
+        results_page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        if hasattr(results_page, 'Tableau_Results'):
+            table_view = results_page.Tableau_Results
+            table_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            table_view.horizontalHeader().setStretchLastSection(True)
+
+    def _charger_categories(self):
+        """Charge les catégories (bases variantes) depuis le service de données."""
+        try:
+            data_service = self._obtenir_data_service()
+            if data_service and data_service.csv_fournisseurs is not None:
+                # Charger depuis categories.csv
+                import os
+                from utils import ressource_path
+                csv_categories = ressource_path(os.path.join("parametres", "categories.csv"))
+                if os.path.exists(csv_categories):
+                    df_categories = pd.read_csv(csv_categories)
+                    if 'basevariante' in df_categories.columns:
+                        return sorted(df_categories['basevariante'].dropna().unique().tolist())
+        except Exception as e:
+            console.print(f"[yellow]Avertissement: impossible de charger les catégories: {e}")
+        return []
+
     def on_traitement_complet(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self.page,
             "Sélectionner un fichier CSV",
-            "Sélectionner un fichier CSV ou Excel",
-            "",
+            str(Path.home()),
             "Fichiers CSV ou Excel (*.csv *.xls *.xlsx);;Fichiers CSV (*.csv);;Fichiers Excel (*.xls *.xlsx);;Tous les fichiers (*)"
         )
         if not file_path:
@@ -106,7 +369,10 @@ class TraitementNavigation:
         self._last_progress_message = ''
         self._show_loading_page()
 
-        # TODO : OPTIMISATION - lancer data_service seulement lors du premier traitement, et le réutiliser pour les traitements suivants
+        # Utilisation du data_service existant s'il existe déjà
+        if self.data_service is None:
+            self.data_service = self._obtenir_data_service()
+
         self.worker = TraitementWorker(file_path, BD_PT, data_service=self.data_service)
         self.worker.finished.connect(self.on_finished)
         self.worker.progress_updated.connect(self.on_progress_update)
@@ -120,12 +386,18 @@ class TraitementNavigation:
         )
 
     def on_cancel_loading(self):
-        # TODO : Implémenter l'annulation du traitement (arreter le thread et nettoyer les ressources)
-        QMessageBox.information(
-            self.page,
-            "Annuler",
-            "Le traitement continue en arrière-plan. Vous pouvez revenir à la page de sélection."
-        )
+        # NOTE : terminate() est un arrêt forcé et brutal du thread ; il peut laisser
+        # des ressources dans un état incohérent. Idéalement, TraitementWorker devrait
+        # exposer un indicateur d'annulation coopératif vérifié entre les étapes.
+        # Conservé tel quel pour rester dans le périmètre de cette révision.
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait()
+
+        if self._progress_timer and self._progress_timer.isActive():
+            self._progress_timer.stop()
+
+        self.worker = None
         self.show_page('traitement_produits')
 
     def on_finished(self, success, message, imported_rows):
@@ -133,7 +405,10 @@ class TraitementNavigation:
             self._progress_timer.stop()
 
         self._update_loading_progress(100)
-        self._update_loading_label(100)
+
+        if self.worker is not None:
+            self.worker.deleteLater()
+            self.worker = None
 
         if not success:
             QMessageBox.critical(self.page, "Erreur de traitement", message)
@@ -144,110 +419,6 @@ class TraitementNavigation:
         self._show_results_page()
 
         QMessageBox.information(self.page, "Traitement terminé", message)
-
-    def _show_loading_page(self):
-        loading_page = self.pages.get('traitement_chargement')
-        if not loading_page:
-            return
-
-        self.show_page('traitement_chargement')
-        if hasattr(loading_page, 'progressBar_Traitement'):
-            loading_page.progressBar_Traitement.setValue(0)
-        self._update_loading_label(0)
-
-        self._progress_timer = QTimer(self.page)
-        self._progress_timer.setInterval(100)
-        self._progress_timer.timeout.connect(self._animate_progress)
-        self._progress_timer.start()
-
-    def on_progress_update(self, value, message):
-        self._last_progress_value = max(0, min(100, int(value)))
-        self._last_progress_message = message or ''
-        self._current_stage = 'creation_modeles' if 'modèle' in self._last_progress_message.lower() else 'traitement_produits'
-        self._update_loading_progress(self._last_progress_value)
-        self._update_loading_label(self._last_progress_value)
-
-    def _animate_progress(self):
-        loading_page = self.pages.get('traitement_chargement')
-        if not loading_page or not hasattr(loading_page, 'progressBar_Traitement'):
-            return
-
-        value = loading_page.progressBar_Traitement.value()
-        if self._current_stage == 'creation_modeles':
-            value = min(20, value + 2)
-        elif self._last_progress_value > 0:
-            value = max(value, self._last_progress_value)
-        elif value < 90:
-            value = min(90, value + 1)
-
-        loading_page.progressBar_Traitement.setValue(value)
-        self._update_loading_label(value)
-
-    def _update_loading_progress(self, value):
-        loading_page = self.pages.get('traitement_chargement')
-        if loading_page and hasattr(loading_page, 'progressBar_Traitement'):
-            loading_page.progressBar_Traitement.setValue(value)
-
-    def _update_loading_label(self, value):
-        loading_page = self.pages.get('traitement_chargement')
-        if not loading_page or not hasattr(loading_page, 'label_3'):
-            return
-
-        if self._current_stage == 'creation_modeles':
-            label_text = f"Création des modèles : {value}%"
-        elif value >= 100:
-            label_text = "Traitement terminé"
-        else:
-            label_text = f"Traitement de produits : {value}%" # TODO: remplacer par : XX / XX (produits traités / produits totaux)
-
-        loading_page.label_3.setText(label_text)
-
-    def _show_results_page(self):
-        results_page = self.pages.get('traitement_resultats')
-        if not results_page:
-            return
-
-        self.show_page('traitement_resultats')
-        self._populate_results_table(self.current_results_df)
-
-        if hasattr(results_page, 'b_Supprimer_Resultats'):
-            results_page.b_Supprimer_Resultats.setEnabled(
-                not self.current_results_df.empty if self.current_results_df is not None else False
-            )
-
-    def _populate_results_table(self, df):
-        results_page = self.pages.get('traitement_resultats')
-        if not results_page or not hasattr(results_page, 'Tableau_Results'):
-            return
-
-        # TODO: ce tableau doit être editable, on doit pouvoir modifier les informations de chaque cellules, filtrer le tableau, le reorganiser (en ordre) et permettre la modification de base_variente exclusivement avec les valeurs presentes dans parametres/categories.csv (DataService.charger_csvs)
-        # TODO: cacher la colonne  'a_reviser' du tableau, ces infos doivent rester seulement en backend
-        # TODO: est_corrige doit etre une case à cocher dans la premiere colonne
-        # TODO: une fois une information changée -> a_reviser = FALSE et est_corrige = TRUE (donc est_corrige doit changer automaticament ou par l'utilisateur s'il coche la case)
-        # TODO: mettre en place la mise à jour de produits dans la BD_PT avec services.mettre_a_jour_produit(self, produit_id, donnees)
-        table_view = results_page.Tableau_Results
-        model = QStandardItemModel()
-
-        if df is None or df.empty:
-            model.setColumnCount(0)
-            model.setRowCount(0)
-            table_view.setModel(model)
-            return
-
-        columns = list(df.columns)
-        model.setColumnCount(len(columns))
-        model.setHorizontalHeaderLabels(columns)
-
-        for row_index, row in df.iterrows():
-            items = [QStandardItem(str(row[col]) if pd.notna(row[col]) else "") for col in columns]
-            for item in items:
-                item.setEditable(False)
-            model.appendRow(items)
-
-        table_view.setModel(model)
-        table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        table_view.verticalHeader().setVisible(False)
-        table_view.setAlternatingRowColors(True)
 
     def on_supprimer_resultats(self):
         if self.current_results_df is None or self.current_results_df.empty:
@@ -278,6 +449,290 @@ class TraitementNavigation:
         self._populate_results_table(self.current_results_df)
         if hasattr(self.pages['traitement_resultats'], 'b_Supprimer_Resultats'):
             self.pages['traitement_resultats'].b_Supprimer_Resultats.setEnabled(False)
+
+    def _show_loading_page(self):
+        loading_page = self.pages.get('traitement_chargement')
+        if not loading_page:
+            return
+
+        self.show_page('traitement_chargement')
+        if hasattr(loading_page, 'progressBar_Traitement'):
+            loading_page.progressBar_Traitement.setValue(0)
+
+        self._progress_timer = QTimer(self.page)
+        self._progress_timer.setInterval(100)
+        self._progress_timer.timeout.connect(self._animate_progress)
+        self._progress_timer.start()
+
+    def on_progress_update(self, value, message):
+        self._last_progress_value = max(0, min(100, int(value)))
+        self._last_progress_message = message or ''
+        self._current_stage = 'creation_modeles' if 'modèle' in self._last_progress_message.lower() else 'traitement_produits'
+        self._update_loading_progress(self._last_progress_value)
+
+    def _animate_progress(self):
+        loading_page = self.pages.get('traitement_chargement')
+        if not loading_page or not hasattr(loading_page, 'progressBar_Traitement'):
+            return
+
+        value = loading_page.progressBar_Traitement.value()
+        if self._current_stage == 'creation_modeles':
+            value = min(20, value + 2)
+        elif self._last_progress_value > 0:
+            value = max(value, self._last_progress_value)
+        elif value < 90:
+            value = min(90, value + 1)
+
+        loading_page.progressBar_Traitement.setValue(value)
+
+    def _update_loading_progress(self, value):
+        loading_page = self.pages.get('traitement_chargement')
+        if loading_page and hasattr(loading_page, 'progressBar_Traitement'):
+            loading_page.progressBar_Traitement.setValue(value)
+
+    def _show_results_page(self):
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page:
+            return
+
+        self.show_page('traitement_resultats')
+        self._populate_results_table(self.current_results_df)
+
+        if hasattr(results_page, 'b_Supprimer_Resultats'):
+            results_page.b_Supprimer_Resultats.setEnabled(
+                not self.current_results_df.empty if self.current_results_df is not None else False
+            )
+
+    def _populate_results_table(self, df):
+        """Peuple le tableau des résultats avec des colonnes éditables et configure les filtres du .ui."""
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page or not hasattr(results_page, 'Tableau_Results'):
+            return
+
+        table_view = results_page.Tableau_Results
+
+        # Colonnes à cacher (non affichables à l'utilisateur)
+        colonnes_cachees = {'id', 'a_reviser', 'idx_code_produit', 'idx_texte_brut', 'texte_propre','fournisseur','siret', 'tva', 'methode_prediction','allergenes'}
+
+        if df is None or df.empty:
+            model = QStandardItemModel()
+            model.setColumnCount(0)
+            model.setRowCount(0)
+            table_view.setModel(model)
+            self._results_model = None
+            self._filtre_proxy = None
+            self._configurer_filtres([])
+            self._definir_etat_filtres(False)
+            return
+
+        # Filtrer les colonnes visibles
+        colonnes_visibles = [col for col in df.columns if col not in colonnes_cachees]
+
+        # est_corrige doit être la première colonne du tableau de correction.
+        if 'est_corrige' in colonnes_visibles:
+            colonnes_visibles.remove('est_corrige')
+            colonnes_visibles.insert(0, 'est_corrige')
+
+        # Créer le modèle de table (source) puis un proxy pour le filtrage
+        model = TableModelEditablePersonnalise(df, colonnes_visibles, self._categories_list)
+        model.item_changed.connect(self._on_model_item_changed)
+        self._results_model = model
+
+        # Réinitialiser la carte des produits (indices du modèle source, pas du proxy)
+        self._produits_id_map = {}
+        for row_index, (_, row) in enumerate(df.iterrows()):
+            produit_id = row.get('id') if 'id' in row.index else None
+            self._produits_id_map[row_index] = {
+                'id': produit_id,
+                'original_data': row.to_dict(),
+            }
+
+        self._filtre_proxy = FiltreProduitsProxyModel(table_view)
+        self._filtre_proxy.setSourceModel(model)
+        table_view.setModel(self._filtre_proxy)
+
+        # Assigner le delegate combobox pour la colonne 'base_variante'
+        if 'base_variante' in colonnes_visibles:
+            base_variante_col_index = colonnes_visibles.index('base_variante')
+            delegate = ComboBoxDelegate(self._categories_list, table_view)
+            table_view.setItemDelegateForColumn(base_variante_col_index, delegate)
+
+        table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table_view.verticalHeader().setVisible(False)
+        table_view.setAlternatingRowColors(True)
+        table_view.setSortingEnabled(True)
+
+        self._configurer_filtres(colonnes_visibles)
+        self._definir_etat_filtres(True)
+
+    def _widgets_filtres(self):
+        """Retourne (combo, champ, bouton_reset) issus du .ui, ou None si absents."""
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page:
+            return None, None, None
+        combo = getattr(results_page, WIDGET_COMBO_COLONNES, None)
+        champ = getattr(results_page, WIDGET_CHAMP_FILTRE, None)
+        bouton_reset = getattr(results_page, WIDGET_BOUTON_RESET, None)
+        return combo, champ, bouton_reset
+
+    def _definir_etat_filtres(self, actif):
+        """Active/désactive les widgets de filtre existants du .ui (aucun résultat = désactivés)."""
+        combo, champ, bouton_reset = self._widgets_filtres()
+        for widget in (combo, champ, bouton_reset):
+            if widget is not None:
+                widget.setEnabled(actif)
+
+    def _configurer_filtres(self, colonnes_visibles):
+        """
+        Réutilise les widgets déjà définis dans le .ui de traitement_resultats
+        (comboBox_Choic_colonnes, lineEdit_Filtre, b_Reset) pour piloter le filtrage
+        du tableau, plutôt que de créer une barre de filtres dynamiquement.
+        """
+        combo, champ, bouton_reset = self._widgets_filtres()
+        if combo is None or champ is None:
+            return
+
+        # Repeupler le combo des colonnes sans déclencher de filtrage pendant l'opération
+        combo.blockSignals(True)
+        combo.clear()
+        combo.addItem("Toutes les colonnes", -1)
+        for col_index, colonne in enumerate(colonnes_visibles):
+            combo.addItem(colonne, col_index)
+        combo.setCurrentIndex(0)
+        combo.blockSignals(False)
+
+        # Le .ui définit "Texte à chercher..." comme texte (et non comme placeholder) :
+        # on vide le champ pour ne pas filtrer sur ce texte par défaut.
+        champ.blockSignals(True)
+        champ.clear()
+        champ.setPlaceholderText("Texte à chercher...")
+        champ.blockSignals(False)
+
+        # Éviter les connexions multiples si la page est repeuplée plusieurs fois
+        for signal, slot in (
+            (champ.textChanged, self._appliquer_filtres),
+            (combo.currentIndexChanged, self._appliquer_filtres),
+        ):
+            try:
+                signal.disconnect(slot)
+            except (TypeError, RuntimeError):
+                pass
+            signal.connect(slot)
+
+        if bouton_reset is not None:
+            try:
+                bouton_reset.clicked.disconnect(self._reinitialiser_filtres)
+            except (TypeError, RuntimeError):
+                pass
+            bouton_reset.clicked.connect(self._reinitialiser_filtres)
+
+        if self._filtre_proxy is not None:
+            self._filtre_proxy.reinitialiser_filtres()
+
+    def _appliquer_filtres(self):
+        """Applique le filtre courant (champ texte + colonne choisie) au tableau."""
+        if self._filtre_proxy is None:
+            return
+
+        combo, champ, _ = self._widgets_filtres()
+        if combo is None or champ is None:
+            return
+
+        texte = champ.text()
+        col_selectionnee = combo.currentData()
+
+        self._filtre_proxy.reinitialiser_filtres()
+        if not texte:
+            return
+
+        if col_selectionnee in (None, -1):
+            self._filtre_proxy.definir_filtre_global(texte)
+        else:
+            self._filtre_proxy.definir_filtre_colonne(col_selectionnee, texte)
+
+    def _reinitialiser_filtres(self):
+        """Vide le champ de recherche, remet 'Toutes les colonnes' et retire les filtres actifs."""
+        combo, champ, _ = self._widgets_filtres()
+
+        if champ is not None:
+            champ.blockSignals(True)
+            champ.clear()
+            champ.blockSignals(False)
+
+        if combo is not None:
+            combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(False)
+
+        if self._filtre_proxy is not None:
+            self._filtre_proxy.reinitialiser_filtres()
+
+    def _on_model_item_changed(self, row_index, col_index, value):
+        """
+        Gère les changements d'éléments du modèle de table. N'est déclenché que
+        pour de vraies modifications (voir TableModelEditablePersonnalise.setData).
+        """
+        if self._updating_cell or row_index not in self._produits_id_map:
+            return
+
+        try:
+            self._updating_cell = True
+            self._sauvegarder_modification(row_index)
+        finally:
+            self._updating_cell = False
+
+    def _sauvegarder_modification(self, row_index):
+        """Sauvegarde les modifications d'une ligne à la base de données."""
+        if row_index not in self._produits_id_map:
+            return
+
+        produit_info = self._produits_id_map[row_index]
+        produit_id = produit_info['id']
+
+        if produit_id is None:
+            console.print(f"[yellow]Avertissement: ID du produit manquant pour la ligne {row_index}")
+            return
+
+        model = self._results_model
+        if not isinstance(model, TableModelEditablePersonnalise):
+            return
+
+        donnees_modifiees = {}
+        for col_index in range(model.columnCount()):
+            colonne = model.colonnes_visibles[col_index]
+            item = model.item(row_index, col_index)
+
+            if item is None:
+                continue
+
+            if colonne == 'est_corrige':
+                donnees_modifiees[colonne] = item.checkState() == Qt.CheckState.Checked
+            else:
+                donnees_modifiees[colonne] = item.text()
+
+        # Appliquer la correction (a_reviser = False, est_corrige = True)
+        donnees_modifiees['a_reviser'] = False
+        donnees_modifiees['est_corrige'] = True
+
+        # Mettre à jour la base de données
+        try:
+            data_service = self._obtenir_data_service()
+            success = data_service.mettre_a_jour_produit(produit_id, donnees_modifiees)
+
+            if success:
+                console.print(f"[green]Produit {produit_id} mis à jour avec succès")
+                # Mettre à jour le DataFrame local (via .loc pour éviter les
+                # avertissements/bugs liés à l'indexation chaînée de pandas).
+                if self.current_results_df is not None and row_index < len(self.current_results_df):
+                    index_ligne = self.current_results_df.index[row_index]
+                    for col, val in donnees_modifiees.items():
+                        if col in self.current_results_df.columns:
+                            self.current_results_df.loc[index_ligne, col] = val
+            else:
+                QMessageBox.warning(self.page, "Erreur", f"Impossible de mettre à jour le produit {produit_id}")
+        except Exception as e:
+            console.print(f"[red]Erreur lors de la sauvegarde: {e}")
+            QMessageBox.critical(self.page, "Erreur", f"Erreur lors de la sauvegarde: {e}")
 
     def _obtenir_data_service(self):
         """Retourne le service de persistance, en le créant au besoin."""

@@ -728,5 +728,38 @@ class ClassificateurProduits:
         """Sauvegarde un produit via la couche de persistance et retourne son id"""
         return self.data_service.inserer_produit(produit, commit=commit)
 
-    #def appliquer_correction ():
-        # TODO : développer fonction qui va mettre changer a_reviser pour FALSE et est_corrige pour TRUE lors d'une correction dans une revision des résultats et de la BD_PT
+    def appliquer_correction(self, produit_id, donnees_corrigees=None):
+        """Applique une correction à un produit en mettant à jour a_reviser et est_corrige.
+        
+        Cette fonction est appelée lorsqu'un utilisateur corrige les données d'un produit
+        dans le tableau des résultats ou lors d'une révision. Elle marque le produit comme
+        corrigé et retire le flag 'a_reviser'.
+        
+        Args:
+            produit_id (int): L'identifiant du produit à corriger
+            donnees_corrigees (dict, optional): Dictionnaire des données corrigées.
+                                               Si None, seuls les flags sont mis à jour.
+        
+        Returns:
+            bool: True si la mise à jour a réussi, False sinon
+        """
+        if self.data_service is None:
+            return False
+        
+        try:
+            # Préparer les données de correction
+            donnees_mise_a_jour = {
+                'a_reviser': False,
+                'est_corrige': True,
+            }
+            
+            # Ajouter les données corrigées si fournies
+            if donnees_corrigees:
+                donnees_mise_a_jour.update(donnees_corrigees)
+            
+            # Mettre à jour le produit dans la base de données
+            return self.data_service.mettre_a_jour_produit(produit_id, donnees_mise_a_jour)
+        except Exception as e:
+            from utils import console
+            console.print(f"[red]Erreur lors de l'application de la correction au produit {produit_id}: {e}")
+            return False
