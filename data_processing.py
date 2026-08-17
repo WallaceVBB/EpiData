@@ -488,7 +488,6 @@ class ClassificateurProduits:
             # Prédictions réutilisables, calculées par lot avant le traitement de
             # chaque tranche de produits : une seule inférence par texte distinct.
             predictions_texte_propre = {}
-            predictions_texte_brut = {}
             tranche_courante = -1
 
             for i, produit in enumerate(produits):
@@ -496,7 +495,7 @@ class ClassificateurProduits:
                     tranche_courante = i // self.TAILLE_LOT_PREDICTION
                     self._precharger_predictions(
                         produits[i:i + self.TAILLE_LOT_PREDICTION], has_code_produit,
-                        predictions_texte_propre, predictions_texte_brut)
+                        predictions_texte_propre)
 
                 texte_brut = produit.get('designation', '').strip()
                 code_produit = produit.get('code_produit') if has_code_produit else None
@@ -551,16 +550,11 @@ class ClassificateurProduits:
                         predictions_texte_propre[texte_propre] = prediction
                     pred_basevariante, proba_basevariante, methode_prediction = prediction
 
-                    # Caractéristiques supplémentaires : les prédictions sur le texte brut
-                    # sont réutilisées au lieu d'être relancées par les extracteurs.
-                    prediction_brut = predictions_texte_brut.get(texte_brut)
-                    if prediction_brut is None:
-                        prediction_brut = self.gestion_ml.predire_hybride_et_svc_lot([texte_brut])[0]
-                        predictions_texte_brut[texte_brut] = prediction_brut
-                    (hybride_brut, _, _), (svc_brut, _) = prediction_brut
-
+                    # Caractéristiques supplémentaires : la basevariante prédite est
+                    # réutilisée au lieu d'être re-prédite par les extracteurs. Les
+                    # regex travaillent sur le texte brut.
                     caracteristiques = self.extraire_caracteristiques(
-                        texte_brut, siret, basevariante=hybride_brut, basevariante_svc=svc_brut)
+                        texte_brut, siret, basevariante=pred_basevariante)
 
                     # Ajuste base_variante, aliment, variante si confiance < 25
                     if proba_basevariante < 0.25:
@@ -627,8 +621,7 @@ class ClassificateurProduits:
                 progress_callback(100, f"Erreur: {str(e)}")
             raise
 
-    def _precharger_predictions(self, produits, has_code_produit,
-                                predictions_texte_propre, predictions_texte_brut):
+    def _precharger_predictions(self, produits, has_code_produit, predictions_texte_propre):
         """Prédit en une seule fois les basevariantes des produits absents de la base.
 
         Les produits déjà connus n'ont besoin d'aucune inférence ; pour les autres,
@@ -637,7 +630,6 @@ class ClassificateurProduits:
         l'ordre des insertions et la résolution des doublons sont inchangés.
         """
         textes_propres = []
-        textes_bruts = []
         for produit in produits:
             texte_brut = produit.get('designation', '').strip()
             code_produit = produit.get('code_produit') if has_code_produit else None
@@ -650,16 +642,11 @@ class ClassificateurProduits:
             texte_propre = self.nettoyer_texte(texte_brut)
             if texte_propre not in predictions_texte_propre:
                 textes_propres.append(texte_propre)
-            if texte_brut not in predictions_texte_brut:
-                textes_bruts.append(texte_brut)
 
         textes_propres = list(dict.fromkeys(textes_propres))
-        textes_bruts = list(dict.fromkeys(textes_bruts))
 
         predictions_texte_propre.update(
             zip(textes_propres, self.gestion_ml.predire_avec_methode_hybride_lot(textes_propres)))
-        predictions_texte_brut.update(
-            zip(textes_bruts, self.gestion_ml.predire_hybride_et_svc_lot(textes_bruts)))
 
     def preparer_modeles(self):
         """S'assure que les modèles de classification sont disponibles.
@@ -693,12 +680,12 @@ class ClassificateurProduits:
                 "Vérifiez l'état du dossier 'modeles'."
             )
 
-    def extraire_caracteristiques(self, texte, siret=None, basevariante=None, basevariante_svc=None):
+    def extraire_caracteristiques(self, texte, siret=None, basevariante=None):
         """Extrait toutes les caractéristiques du produit.
 
-        `basevariante` (prédiction hybride) et `basevariante_svc` (prédiction
-        LinearSVC) sont les prédictions déjà calculées pour `texte` : les
-        extracteurs les réutilisent au lieu de relancer une inférence.
+        `basevariante` est la prédiction déjà calculée pour le produit (à partir
+        du texte nettoyé) : les extracteurs la réutilisent au lieu de relancer
+        une inférence. `texte` est le texte brut, utilisé par les regex.
         """
 
         # convertir siret en nom du fournisseur
@@ -710,7 +697,7 @@ class ClassificateurProduits:
 
         # Extrair poids, unité, conditionnement et packaging
         poids, poids_min, poids_max, unite, conditionnement, packaging, unite_packaging, unite_consommation = self.extraire_poids_et_packaging(
-            texte, famille=famille, basevariante=basevariante_svc)
+            texte, famille=famille, basevariante=basevariante)
 
         # Origine
         origine = self.extraire_origine(texte)

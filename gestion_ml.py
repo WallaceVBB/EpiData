@@ -297,23 +297,6 @@ class GestionML:
 
         return resultats
 
-    def predire_hybride_et_svc_lot(self, textes):
-        """Prédit par lot la basevariante hybride ET la basevariante LinearSVC.
-
-        Les deux prédictions partagent la même inférence LinearSVC, ce qui évite
-        de repasser le même texte dans le modèle pour chaque usage.
-        Retourne une liste de tuples ((pred, score, methode), (pred_svc, score_svc)).
-        """
-        if not textes:
-            return []
-
-        resultats_cosine = self.predire_avec_cosine_similarity_lot(textes)
-        resultats_svc = self.predire_avec_svc_lot(textes)
-        return [
-            (self._decider_hybride(resultat_cosine, resultat_svc), resultat_svc)
-            for resultat_cosine, resultat_svc in zip(resultats_cosine, resultats_svc)
-        ]
-
     def _decider_hybride(self, resultat_cosine, resultat_svc):
         """Applique les règles de décision hybrides à des prédictions déjà calculées."""
         pred_cosine, proba_cosine = resultat_cosine
