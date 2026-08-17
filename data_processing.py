@@ -16,7 +16,10 @@ from utils import ressource_path, nettoyer_texte
 # Code
 class ClassificateurProduits:
     """Classe pour classifier et traiter les produits alimentaires."""
-    
+
+    # Nombre de produits dont les basevariantes sont prédites en une seule passe
+    TAILLE_LOT_PREDICTION = 256
+
     def __init__(self, controller=None, bd_pt=None, data_service=None, gestion_ml=None):
         """Initialise le classificateur avec tous les attributs nécessaires."""
         self.controller = controller
@@ -37,9 +40,14 @@ class ClassificateurProduits:
         self.traitement_appertises = pd.DataFrame()  # DataFrame du traitement des appertises
         self.poids_moyen_fl = pd.DataFrame()  # DataFrame des poids moyens fruits/légumes
 
-        # Charger les données depuis le service
-        self._charger_donnees_service()
-        self._charger_parametres()
+        # Index de recherche O(1) construits une seule fois à partir des données de référence
+        self._fournisseur_par_siret = {}
+        self._categorie_par_basevariante = {}
+        self._appertise_par_basevariante_conditionnement = {}
+        self._poids_fl_par_basevariante = {}
+        self._regex_par_origine = []
+        self._regex_par_label = []
+        self._REGEX_POIDS_UNITES = None
 
         # Patterns regex compilés pour optimisation
         self._REGEX_POIDS_SPECIAL = re.compile(r'(\d+)[kKgG](\d+)')  # Cas spéciaux comme "2K5" ou "1G5"
@@ -51,6 +59,10 @@ class ClassificateurProduits:
         self._REGEX_PACKAGING_XONLY = re.compile(r'[xX*]\s*(\d+)')
         self._REGEX_ORIGINE = re.compile(r'(?<!\w)({}?)(?!\w)')
         self._REGEX_LABEL = re.compile(r'(?<!\w)({}?)(?!\w)')
+
+        # Charger les données depuis le service
+        self._charger_donnees_service()
+        self._charger_parametres()
 
     def _charger_donnees_service(self):
         """Charge les données de référence depuis le service de données."""
@@ -65,6 +77,61 @@ class ClassificateurProduits:
         self.traitement_appertises = data_service.traitement_appertises
         self.poids_moyen_fl = data_service.poids_moyen_fl
 
+        self._indexer_donnees_service()
+
+    def _indexer_donnees_service(self):
+        """Pré-normalise les données de référence en dictionnaires et regex compilées.
+
+        Ces structures ne dépendent que des fichiers de référence : elles sont
+        construites une seule fois au chargement, plutôt qu'un scan de DataFrame
+        ou une compilation de regex par produit traité.
+        """
+        self._fournisseur_par_siret = {}
+        if self.fournisseurs is not None and not self.fournisseurs.empty:
+            for siret, fournisseur in zip(self.fournisseurs['siret'], self.fournisseurs['fournisseur']):
+                self._fournisseur_par_siret.setdefault(str(siret).strip(), fournisseur)
+
+        self._appertise_par_basevariante_conditionnement = {}
+        if self.traitement_appertises is not None and not self.traitement_appertises.empty:
+            colonnes = zip(self.traitement_appertises['basevariante'],
+                           self.traitement_appertises['conditionnement'],
+                           self.traitement_appertises['poids'],
+                           self.traitement_appertises['unite_poids'])
+            for basevariante, conditionnement, poids, unite_poids in colonnes:
+                if not isinstance(basevariante, str):
+                    continue
+                cle = (basevariante.lower(), conditionnement)
+                self._appertise_par_basevariante_conditionnement.setdefault(cle, (poids, unite_poids))
+
+        self._poids_fl_par_basevariante = {}
+        if self.poids_moyen_fl is not None and not self.poids_moyen_fl.empty:
+            colonnes = zip(self.poids_moyen_fl['basevariante'],
+                           self.poids_moyen_fl['poids'],
+                           self.poids_moyen_fl['unite_poids'])
+            for basevariante, poids, unite_poids in colonnes:
+                if not isinstance(basevariante, str):
+                    continue
+                self._poids_fl_par_basevariante.setdefault(basevariante.lower(), (poids, unite_poids))
+
+        self._regex_par_origine = self._compiler_regex_dictionnaire(self.origines, self._REGEX_ORIGINE.pattern)
+        self._regex_par_label = self._compiler_regex_dictionnaire(self.labels, self._REGEX_LABEL.pattern)
+
+        toutes_unites = [unite for sublist in self.unites_poids.values() for unite in sublist]
+        unites_regex = '|'.join(re.escape(unite) for unite in toutes_unites)
+        self._REGEX_POIDS_UNITES = re.compile(
+            r'(\d+[,.]?\d*)(?:-(\d+[,.]?\d*))?\s?({})(?=\w*\b)'.format(unites_regex), re.IGNORECASE)
+
+    @staticmethod
+    def _compiler_regex_dictionnaire(dictionnaire, gabarit):
+        """Compile une regex par clé d'un dictionnaire {clé: [écritures]}."""
+        regex_compilees = []
+        for cle, ecritures in dictionnaire.items():
+            ecritures_propres = [re.escape(str(v).strip().lower()) for v in ecritures if str(v).strip()]
+            if not ecritures_propres:
+                continue
+            regex_compilees.append((cle, re.compile(gabarit.format('|'.join(ecritures_propres)))))
+        return regex_compilees
+
     def _charger_parametres(self):
         """Charge les fichiers de paramètres nécessaires au traitement."""
         try:
@@ -73,8 +140,20 @@ class ClassificateurProduits:
                 df = pd.read_csv(categories_csv, dtype=str)
                 df.columns = df.columns.str.lower()
                 self.categories = df
+                self._indexer_categories()
         except Exception as e:
             print(f"Erreur lors du chargement des paramètres catégories: {e}")
+
+    def _indexer_categories(self):
+        """Construit l'index basevariante -> (aliment, variante, allergenes, tva, famille)."""
+        self._categorie_par_basevariante = {}
+        if self.categories is None or self.categories.empty:
+            return
+        colonnes = zip(self.categories['basevariante'], self.categories['aliment'], self.categories['variante'],
+                       self.categories['allergenes'], self.categories['tva'], self.categories['famille'])
+        for basevariante, aliment, variante, allergenes, tva, famille in colonnes:
+            self._categorie_par_basevariante.setdefault(
+                str(basevariante).lower(), (aliment, variante, allergenes, tva, famille))
 
     def charger_modeles(self):
         """Charge les modèles via la couche ML."""
@@ -89,19 +168,19 @@ class ClassificateurProduits:
         """Nettoie et normalise le texte (implémentation unique dans utils.py)."""
         return nettoyer_texte(texte)
 
-    def attribuer_aliment_et_variante(self, texte):
-        basevariante, score_confiance, methode = self.predire_avec_methode_hybride(texte)
+    def attribuer_aliment_et_variante(self, texte, basevariante=None):
+        """Attribue aliment/variante à partir de la basevariante.
+
+        La basevariante déjà prédite pour le produit peut être fournie par
+        l'appelant, ce qui évite une prédiction supplémentaire.
+        """
+        if basevariante is None:
+            basevariante, score_confiance, methode = self.predire_avec_methode_hybride(texte)
         basevariante = basevariante.lower()
 
-        mask = self.categories['basevariante'].astype(str).str.lower() == basevariante
-        matching_rows = self.categories[mask]
-
-        if not matching_rows.empty:
-            aliment = matching_rows.iloc[0]['aliment']
-            variante = matching_rows.iloc[0]['variante']
-            allergenes = matching_rows.iloc[0]['allergenes']
-            tva = matching_rows.iloc[0]['tva']
-            famille = matching_rows.iloc[0]['famille']
+        categorie = self._categorie_par_basevariante.get(basevariante)
+        if categorie is not None:
+            aliment, variante, allergenes, tva, famille = categorie
             return aliment, variante, allergenes, tva, famille
         return None, None, None, None, None
 
@@ -119,12 +198,7 @@ class ClassificateurProduits:
         if self.fournisseurs is None or self.fournisseurs.empty:
             return None
 
-        mask = self.fournisseurs['siret'].astype(str).str.strip() == str(siret).strip()
-        matching_rows = self.fournisseurs[mask]
-
-        if not matching_rows.empty:
-            return matching_rows.iloc[0]['fournisseur']
-        return None
+        return self._fournisseur_par_siret.get(str(siret).strip())
 
     def extraire_origine(self, texte):
         try:
@@ -138,20 +212,8 @@ class ClassificateurProduits:
                     return None
 
             # Si pas une exception, procéder à la recherche normale d'origine
-            for origines, base_variante in self.origines.items():
-                base_variante_clean = []
-                for v in base_variante:
-                    v_str = str(v).strip().lower()
-                    if v_str:
-                        base_variante_clean.append(re.escape(v_str))
-
-                if not base_variante_clean:
-                    continue
-
-                pattern_str = '|'.join(base_variante_clean)
-                regex_origine = self._REGEX_ORIGINE.pattern.format(pattern_str)
-
-                if re.search(regex_origine, texte):
+            for origines, regex_origine in self._regex_par_origine:
+                if regex_origine.search(texte):
                     return origines
         except Exception:
             pass
@@ -161,16 +223,8 @@ class ClassificateurProduits:
         labels_trouves = []
         try:
             texte = texte.lower()
-            for label, ecritures_label in self.labels.items():
-                labels_clean = [re.escape(str(v).strip().lower())
-                                for v in ecritures_label if str(v).strip()]
-                if not labels_clean:
-                    continue
-
-                pattern_str = '|'.join(labels_clean)
-                regex_label = self._REGEX_LABEL.pattern.format(pattern_str)
-
-                if re.search(regex_label, texte):
+            for label, regex_label in self._regex_par_label:
+                if regex_label.search(texte):
                     labels_trouves.append(label)
         except Exception:
             pass
@@ -178,9 +232,6 @@ class ClassificateurProduits:
 
     def extraire_poids(self, texte):
         """Extrait les informations de poids"""
-        toutes_unites = [unite for sublist in self.unites_poids.values() for unite in sublist]
-        unites_regex = '|'.join(re.escape(unite) for unite in toutes_unites)
-
         # Cas spéciaux comme "2K5" ou "1G5" (2,5K)....... pas encore prêt, il continue à reconnaître comme 2 kg et 1 g
         match = self._REGEX_POIDS_SPECIAL.search(texte)
         if match:
@@ -189,9 +240,8 @@ class ClassificateurProduits:
             unite_consommation = 'Kg' if unite == 'kg' else 'pièce'
             return poids, poids, poids, unite, unite_consommation
 
-        # Fonction regex
-        pattern = r'(\d+[,.]?\d*)(?:-(\d+[,.]?\d*))?\s?({})(?=\w*\b)'.format(unites_regex)
-        matches = re.findall(pattern, texte, re.IGNORECASE)
+        # Fonction regex (compilée une seule fois au chargement des unités de poids)
+        matches = self._REGEX_POIDS_UNITES.findall(texte)
 
         poids_max = 0
         best_match = None
@@ -295,8 +345,12 @@ class ClassificateurProduits:
 
         return conditionnement, packaging, unite_packaging
 
-    def extraire_poids_et_packaging(self, texte, famille=None):
-        """Extrait les poids et packaging selon les règles spécifiées."""
+    def extraire_poids_et_packaging(self, texte, famille=None, basevariante=None):
+        """Extrait les poids et packaging selon les règles spécifiées.
+
+        `basevariante` permet de réutiliser la prédiction déjà faite pour le
+        produit au lieu d'en déclencher une nouvelle.
+        """
         poids, poids_min, poids_max, unite, unite_consommation = self.extraire_poids(texte)
 
         packaging = None
@@ -324,7 +378,7 @@ class ClassificateurProduits:
 
         else:
             # Vérifier si base_variante est présente dans le CSV
-            base_variante = getattr(self, 'base_variante', None)
+            base_variante = basevariante or getattr(self, 'base_variante', None)
             if not base_variante:
                 base_variante, _ = self.gestion_ml.predire_avec_svc(texte)
             base_variante = base_variante.lower() if base_variante else ''
@@ -332,15 +386,13 @@ class ClassificateurProduits:
             # Cas 2 : Poids non trouvé → chercher conditionnement
             conditionnement, _, _ = self.extraire_packaging(texte)
             if conditionnement:
-                if not self.traitement_appertises.empty and base_variante:
-                    match = self.traitement_appertises[
-                        (self.traitement_appertises['basevariante'].str.lower() == base_variante) &
-                        (self.traitement_appertises['conditionnement'] == conditionnement)
-                        ]
+                if base_variante:
+                    appertise = self._appertise_par_basevariante_conditionnement.get(
+                        (base_variante, conditionnement))
 
-                    if not match.empty:
-                        poids_csv = float(str(match.iloc[0]['poids']).replace(',', '.'))
-                        unite_csv = match.iloc[0]['unite_poids']
+                    if appertise is not None:
+                        poids_csv = float(str(appertise[0]).replace(',', '.'))
+                        unite_csv = appertise[1]
                         unite_consommation = "pièce"
                         return poids_csv, poids_csv, poids_csv, unite_csv, conditionnement, packaging, unite_packaging, unite_consommation
 
@@ -350,11 +402,11 @@ class ClassificateurProduits:
                     return poids_defaut, poids_defaut, poids_defaut, "kg", conditionnement, packaging, unite_packaging, unite_consommation
 
             # Cas 3 : fruits/légumes
-            if not self.poids_moyen_fl.empty and base_variante:
-                match = self.poids_moyen_fl[self.poids_moyen_fl['basevariante'].str.lower() == base_variante]
-                if not match.empty:
-                    poids_csv = float(str(match.iloc[0]['poids']).replace(',', '.'))
-                    unite_csv = match.iloc[0]['unite_poids']
+            if base_variante:
+                poids_fl = self._poids_fl_par_basevariante.get(base_variante)
+                if poids_fl is not None:
+                    poids_csv = float(str(poids_fl[0]).replace(',', '.'))
+                    unite_csv = poids_fl[1]
                     unite_consommation = "pièce"
                     return poids_csv, poids_csv, poids_csv, unite_csv, conditionnement, packaging, unite_packaging, unite_consommation
 
@@ -432,8 +484,20 @@ class ClassificateurProduits:
 
             # Optimisation: vérifier une seule fois si la colonne code_produit existe
             has_code_produit = 'code_produit' in df.columns
-            
+
+            # Prédictions réutilisables, calculées par lot avant le traitement de
+            # chaque tranche de produits : une seule inférence par texte distinct.
+            predictions_texte_propre = {}
+            predictions_texte_brut = {}
+            tranche_courante = -1
+
             for i, produit in enumerate(produits):
+                if i // self.TAILLE_LOT_PREDICTION != tranche_courante:
+                    tranche_courante = i // self.TAILLE_LOT_PREDICTION
+                    self._precharger_predictions(
+                        produits[i:i + self.TAILLE_LOT_PREDICTION], has_code_produit,
+                        predictions_texte_propre, predictions_texte_brut)
+
                 texte_brut = produit.get('designation', '').strip()
                 code_produit = produit.get('code_produit') if has_code_produit else None
                 siret = produit.get('siret')
@@ -480,11 +544,23 @@ class ClassificateurProduits:
                     # Pré-traitement
                     texte_propre = self.nettoyer_texte(texte_brut)
 
-                    # Prédictions avec méthode hybride
-                    pred_basevariante, proba_basevariante, methode_prediction = self.predire_avec_methode_hybride(texte_propre)
+                    # Prédictions avec méthode hybride (réutilisées depuis le lot pré-calculé)
+                    prediction = predictions_texte_propre.get(texte_propre)
+                    if prediction is None:
+                        prediction = self.predire_avec_methode_hybride(texte_propre)
+                        predictions_texte_propre[texte_propre] = prediction
+                    pred_basevariante, proba_basevariante, methode_prediction = prediction
 
-                    # Caractéristiques supplémentaires
-                    caracteristiques = self.extraire_caracteristiques(texte_brut, siret)
+                    # Caractéristiques supplémentaires : les prédictions sur le texte brut
+                    # sont réutilisées au lieu d'être relancées par les extracteurs.
+                    prediction_brut = predictions_texte_brut.get(texte_brut)
+                    if prediction_brut is None:
+                        prediction_brut = self.gestion_ml.predire_hybride_et_svc_lot([texte_brut])[0]
+                        predictions_texte_brut[texte_brut] = prediction_brut
+                    (hybride_brut, _, _), (svc_brut, _) = prediction_brut
+
+                    caracteristiques = self.extraire_caracteristiques(
+                        texte_brut, siret, basevariante=hybride_brut, basevariante_svc=svc_brut)
 
                     # Ajuste base_variante, aliment, variante si confiance < 25
                     if proba_basevariante < 0.25:
@@ -551,6 +627,40 @@ class ClassificateurProduits:
                 progress_callback(100, f"Erreur: {str(e)}")
             raise
 
+    def _precharger_predictions(self, produits, has_code_produit,
+                                predictions_texte_propre, predictions_texte_brut):
+        """Prédit en une seule fois les basevariantes des produits absents de la base.
+
+        Les produits déjà connus n'ont besoin d'aucune inférence ; pour les autres,
+        les textes distincts sont vectorisés et prédits par lot. La recherche en
+        base reste faite produit par produit dans la boucle principale, si bien que
+        l'ordre des insertions et la résolution des doublons sont inchangés.
+        """
+        textes_propres = []
+        textes_bruts = []
+        for produit in produits:
+            texte_brut = produit.get('designation', '').strip()
+            code_produit = produit.get('code_produit') if has_code_produit else None
+
+            if code_produit and self.data_service.obtenir_produit_par_code_produit(code_produit):
+                continue
+            if self.data_service.obtenir_produit_par_texte_brut(texte_brut):
+                continue
+
+            texte_propre = self.nettoyer_texte(texte_brut)
+            if texte_propre not in predictions_texte_propre:
+                textes_propres.append(texte_propre)
+            if texte_brut not in predictions_texte_brut:
+                textes_bruts.append(texte_brut)
+
+        textes_propres = list(dict.fromkeys(textes_propres))
+        textes_bruts = list(dict.fromkeys(textes_bruts))
+
+        predictions_texte_propre.update(
+            zip(textes_propres, self.gestion_ml.predire_avec_methode_hybride_lot(textes_propres)))
+        predictions_texte_brut.update(
+            zip(textes_bruts, self.gestion_ml.predire_hybride_et_svc_lot(textes_bruts)))
+
     def preparer_modeles(self):
         """S'assure que les modèles de classification sont disponibles.
         L'entraînement n'est déclenché que si aucun fichier de modèle n'est présent."""
@@ -583,18 +693,24 @@ class ClassificateurProduits:
                 "Vérifiez l'état du dossier 'modeles'."
             )
 
-    def extraire_caracteristiques(self, texte, siret=None):
-        """Extrait toutes les caractéristiques du produit"""
+    def extraire_caracteristiques(self, texte, siret=None, basevariante=None, basevariante_svc=None):
+        """Extrait toutes les caractéristiques du produit.
+
+        `basevariante` (prédiction hybride) et `basevariante_svc` (prédiction
+        LinearSVC) sont les prédictions déjà calculées pour `texte` : les
+        extracteurs les réutilisent au lieu de relancer une inférence.
+        """
 
         # convertir siret en nom du fournisseur
         fournisseur = self.attribuer_fournisseur(siret)
 
         # attribuer aliment et variante
-        aliment, variante, allergenes, tva, famille = self.attribuer_aliment_et_variante(texte)
+        aliment, variante, allergenes, tva, famille = self.attribuer_aliment_et_variante(
+            texte, basevariante=basevariante)
 
         # Extrair poids, unité, conditionnement et packaging
         poids, poids_min, poids_max, unite, conditionnement, packaging, unite_packaging, unite_consommation = self.extraire_poids_et_packaging(
-            texte, famille=famille)
+            texte, famille=famille, basevariante=basevariante_svc)
 
         # Origine
         origine = self.extraire_origine(texte)
