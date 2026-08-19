@@ -36,6 +36,12 @@ class Application:
         # Dictionnaire contenant toutes les pages
         self.pages = {}
 
+        # Dernière sous-page du groupe traitement consultée  
+        self.derniere_page_traitement = "traitement_produits"
+
+        # Dernière sous-page du groupe convertisseur facture pdf
+        self.derniere_page_convertisseur_pdf = "convertir_pdf"
+
         # Chargement des pages
         self.load_pages()
 
@@ -104,11 +110,11 @@ class Application:
         )
 
         self.window.b_Traiter_fichier.clicked.connect(
-            lambda: self.show_page("traitement_produits")
+            lambda: self.show_page(self.derniere_page_traitement)
         )
 
         self.window.b_Convertir_PDF.clicked.connect(
-            lambda: self.show_page("convertir_pdf")
+            lambda: self.show_page(self.derniere_page_convertisseur_pdf)
         )
 
         self.window.b_Parametres.clicked.connect(
@@ -116,10 +122,17 @@ class Application:
         )
 
     def show_page(self, page_name):
-        # Récupération de la page demandée
-        page = self.pages[page_name]
+        # Mémorise la dernière sous-page du groupe traitement  
+        if page_name in ("traitement_produits", "traitement_chargement", "traitement_resultats"):  
+            self.derniere_page_traitement = page_name  
+    
+        if page_name in ("convertir_pdf","convertisseur_pdf_chargement","convertisseur_pdf_resultats"):
+            self.derniere_page_convertisseur_pdf = page_name
 
-        # Affichage de la page
+        # Récupération de la page demandée  
+        page = self.pages[page_name]  
+    
+        # Affichage de la page  
         self.window.stackedWidget.setCurrentWidget(page)
 
     def run(self):

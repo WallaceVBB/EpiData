@@ -295,10 +295,10 @@ class TraitementNavigation:
         self._configurer_redimensionnement()
 
     def _connect_buttons(self):
-        if hasattr(self.page, 'b_Traitement_complet'):
-            self.page.b_Traitement_complet.clicked.connect(self.on_traitement_complet)
-        if hasattr(self.page, 'b_Traitement_simplifie'):
-            self.page.b_Traitement_simplifie.clicked.connect(self.on_traitement_simplifie)
+        if hasattr(self.page, 'b_Traitement_Stardard'):
+            self.page.b_Traitement_Stardard.clicked.connect(self.on_traitement_standard)
+        if hasattr(self.page, 'b_Traitement_Choix'):
+            self.page.b_Traitement_Choix.clicked.connect(self.on_traitement_choix)
 
     def _connect_progress_buttons(self):
         loading_page = self.pages.get('traitement_chargement')
@@ -353,7 +353,7 @@ class TraitementNavigation:
             console.print(f"[yellow]Avertissement: impossible de charger les catégories: {e}")
         return []
 
-    def on_traitement_complet(self):
+    def on_traitement_standard(self):
         file_path, _ = QFileDialog.getOpenFileName(
             self.page,
             "Sélectionner un fichier CSV",
@@ -378,11 +378,11 @@ class TraitementNavigation:
         self.worker.progress_updated.connect(self.on_progress_update)
         self.worker.start()
 
-    def on_traitement_simplifie(self):
+    def on_traitement_choix(self):
         QMessageBox.information(
             self.page,
-            "Traitement simplifié",
-            "Le traitement simplifié n'est pas encore pris en charge."
+            "Traitement choix",
+            "Le traitement en choisissant les colonnes n'est pas encore pris en charge."
         )
 
     def on_cancel_loading(self):
