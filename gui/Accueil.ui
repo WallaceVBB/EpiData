@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>520</width>
-    <height>330</height>
+    <width>714</width>
+    <height>475</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -15,6 +15,11 @@
     <horstretch>0</horstretch>
     <verstretch>0</verstretch>
    </sizepolicy>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>12</pointsize>
+   </font>
   </property>
   <property name="windowTitle">
    <string>Form</string>
@@ -28,7 +33,10 @@
       </font>
      </property>
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;A écrire une explication&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:12pt;&quot;&gt;sur chaque fonctionnalité&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-size:28pt; font-weight:700;&quot;&gt;Bienvenue sur EpiData&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;EpiData simplifie le traitement et l’analyse de vos données d’achats alimentaires.&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;Importez vos factures, structurez automatiquement les données et enrichissez les informations sur les produits grâce aux outils de traitement automatique.&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;📄 &lt;/span&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;Convertir&lt;/span&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt; vos factures PDF en données structurées&lt;br/&gt;🔎 &lt;/span&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;Classifier&lt;/span&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt; et enrichir automatiquement les produits&lt;br/&gt;📊 &lt;/span&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;Préparer&lt;/span&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt; vos données pour l’analyse et le reporting&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot; font-size:14pt; font-weight:700;&quot;&gt;Gagnez du temps et transformez vos données d’achats en informations exploitables.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>
