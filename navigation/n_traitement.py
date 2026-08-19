@@ -256,11 +256,11 @@ class TraitementWorker(QThread):
             if imported_df is None:
                 raise RuntimeError("Le traitement du fichier a échoué")
             imported_rows = imported_df
-        except Exception as exc:
-            console.print(f"[red]Erreur lors du traitement du fichier : {exc}")
+        except Exception as e:
+            console.print(f"[red]Erreur lors du traitement du fichier : {e}")
             result['success'] = False
-            result['message'] = str(exc)
-            self.progress_updated.emit(100, f"Erreur: {str(exc)}")
+            result['message'] = str(e)
+            self.progress_updated.emit(100, f"Erreur: {str(e)}")
 
         self.finished.emit(result['success'], result['message'], imported_rows)
 
@@ -295,10 +295,10 @@ class TraitementNavigation:
         self._configurer_redimensionnement()
 
     def _connect_buttons(self):
-        if hasattr(self.page, 'Traitement_complet'):
-            self.page.Traitement_complet.clicked.connect(self.on_traitement_complet)
-        if hasattr(self.page, 'Traitement_simplifie'):
-            self.page.Traitement_simplifie.clicked.connect(self.on_traitement_simplifie)
+        if hasattr(self.page, 'b_Traitement_complet'):
+            self.page.b_Traitement_complet.clicked.connect(self.on_traitement_complet)
+        if hasattr(self.page, 'b_Traitement_simplifie'):
+            self.page.b_Traitement_simplifie.clicked.connect(self.on_traitement_simplifie)
 
     def _connect_progress_buttons(self):
         loading_page = self.pages.get('traitement_chargement')

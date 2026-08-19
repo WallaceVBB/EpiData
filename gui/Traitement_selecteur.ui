@@ -72,7 +72,7 @@
    <item>
     <layout class="QGridLayout" name="gridLayout">
      <item row="1" column="1">
-      <widget class="QPushButton" name="Traitement_simplifie">
+      <widget class="QPushButton" name="b_Traitement_simplifie">
        <property name="text">
         <string>Traitement simplifié</string>
        </property>
@@ -82,7 +82,7 @@
       </widget>
      </item>
      <item row="0" column="1">
-      <widget class="QPushButton" name="Traitement_complet">
+      <widget class="QPushButton" name="b_Traitement_complet">
        <property name="text">
         <string>Traitement complet</string>
        </property>

@@ -413,3 +413,16 @@ class DataService:
         if self.conn is not None:
             self.conn.close()
             self.conn = None
+
+    def recreer_bd_pt (self):
+        bd_pt = ressource_path(os.path.join(BD_PT))
+        if os.path.exists(bd_pt):
+            os.remove(bd_pt)
+        self.creer_bd_pt()
+
+    def recreer_bd_entrainement (self):
+        bd_entrainement = self.bd_entrainement
+        if os.path.exists (bd_entrainement):
+            os.remove(bd_entrainement)
+        self.creer_bd_entrainement
+            

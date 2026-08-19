@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_extracteur_factures import FactureNavigation
+from navigation.n_parametres import ParametresNavigation
 from services import DataService
 from utils import console, GUI_DIR, NAVIGATION_DIR, copier_fichier_ressource_vers_utilisateur
 
@@ -38,7 +39,7 @@ class Application:
         # Chargement des pages
         self.load_pages()
 
-        # Configuration des traitements
+        # Configuration des pages
         self.traitement_navigation = TraitementNavigation(
             self.pages["traitement_produits"],
             self.show_page,
@@ -47,6 +48,12 @@ class Application:
         )
         self.facture_navigation = FactureNavigation(
             self.pages["convertir_pdf"],
+            self.show_page,
+            self.pages,
+            data_service=self.data_service
+        )
+        self.parametres_navigation = ParametresNavigation(
+            self.pages["parametres"],
             self.show_page,
             self.pages,
             data_service=self.data_service
