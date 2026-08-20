@@ -66,7 +66,7 @@ BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des p
 
 # Fichiers de ressources copiés vers le dossier utilisateur au premier lancement
 FICHIERS_RESSOURCES = [
-    ("pt_base.csv", "donnees"),
+    ("pt_base.csv", "parametres"),
     ("categories.csv", "parametres"),
     ("fournisseurs.csv", "parametres"),
     ("labels.csv", "parametres"),

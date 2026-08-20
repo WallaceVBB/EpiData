@@ -191,7 +191,7 @@ class DataService:
 
     def creer_bd_entrainement(self):
         """Crée une nouvelle base de données d'entraînement à partir du CSV pt_base.csv."""
-        pt_base = ressource_path(os.path.join("donnees", "pt_base.csv"))
+        pt_base = ressource_path(os.path.join("parametres", "pt_base.csv"))
         if not os.path.exists(pt_base):
             raise FileNotFoundError(f"Le fichier {pt_base} n'existe pas")
 
