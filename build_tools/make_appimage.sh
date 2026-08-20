@@ -1,5 +1,5 @@
 #!/usr/bin/env bash  
-# packaging/make_appimage.sh  
+# build_tools/make_appimage.sh  
 set -euo pipefail  
   
 APP=EpiData  
@@ -18,8 +18,8 @@ mkdir -p "$APPDIR/usr/share/icons/hicolor/256x256/apps"
 cp -r "$DIST/"* "$APPDIR/usr/bin/"  
   
 # 3. Copier le .desktop et l'icône  
-cp "$ROOT/packaging/$APP.desktop" "$APPDIR/usr/share/applications/"  
-cp "$ROOT/packaging/epidata.png"  "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP.png"  
+cp "$ROOT/build_tools/$APP.desktop" "$APPDIR/usr/share/applications/"  
+cp "$ROOT/build_tools/epidata.png"  "$APPDIR/usr/share/icons/hicolor/256x256/apps/$APP.png"  
   
 # 4. AppRun -> lance l'exécutable EpiData  
 cat > "$APPDIR/AppRun" <<'EOF'  
@@ -30,8 +30,8 @@ EOF
 chmod +x "$APPDIR/AppRun"  
   
 # le .desktop et l'icône doivent aussi être à la racine de l'AppDir  
-cp "$ROOT/packaging/$APP.desktop" "$APPDIR/$APP.desktop"  
-cp "$ROOT/packaging/epidata.png"  "$APPDIR/epidata.png"  
+cp "$ROOT/build_tools/$APP.desktop" "$APPDIR/$APP.desktop"  
+cp "$ROOT/build_tools/epidata.png"  "$APPDIR/epidata.png"  
   
 # 5. Générer l'AppImage  
 wget -q "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" -O appimagetool  

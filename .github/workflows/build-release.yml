@@ -32,14 +32,14 @@ jobs:
       - name: Créer l'installeur Inno Setup
         run: |  
           choco install innosetup -y
-          "%programfiles(x86)%\Inno Setup 6\ISCC.exe" packaging\EpiData.iss  
+          "%programfiles(x86)%\Inno Setup 6\ISCC.exe" build_tools\EpiData.iss  
         shell: cmd
   
       - name: Upload artefact Windows  
         uses: actions/upload-artifact@v4  
         with:  
           name: windows-installer  
-          path: packaging\Output\*.exe  
+          path: build_tools\Output\*.exe  
   
   # ----------------- LINUX -----------------  
   build-linux:  
@@ -66,7 +66,7 @@ jobs:
         run: pyinstaller EpiData.spec
         
       - name: Construire l'AppImage  
-        run: bash packaging/make_appimage.sh  
+        run: bash build_tools/make_appimage.sh  
         env:  
           APP_VERSION: ${{ github.ref_name }}
   
