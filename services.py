@@ -425,4 +425,23 @@ class DataService:
         if os.path.exists (bd_entrainement):
             os.remove(bd_entrainement)
         self.creer_bd_entrainement
-            
+
+    def exporter_bd_pt_excel(self, chemin):  
+        """Exporte la base de produits traités vers un fichier Excel."""  
+        df = self.obtenir_produits()  
+        if df.empty:  
+            return False  
+        df.to_excel(chemin, index=False)  
+        return True
+
+    def exporter_bd_entrainement_excel(self, chemin):  
+            """Exporte la base de produits traités vers un fichier Excel."""  
+            self.maj_bd_entrainement()
+            with sqlite3.connect(self.bd_entrainement) as conn:
+                df_entrainement = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn)
+            if df_entrainement.empty:  
+                return False  
+            df_entrainement.to_excel(chemin, index=False)  
+            return True
+
+    

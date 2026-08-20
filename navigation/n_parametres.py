@@ -1,6 +1,8 @@
 #Ce fichier gére la navigation de la page de paramètres (Parametres.ui) de l'application
 
-from PySide6.QtWidgets import QMessageBox
+import os  
+from pathlib import Path  
+from PySide6.QtWidgets import QMessageBox, QFileDialog
 
 from services import DataService
 from gestion_ml import GestionML
@@ -41,6 +43,14 @@ class ParametresNavigation:
 
         self.page.b_MAJ_Logiciel.clicked.connect(
             self.on_maj_logiciel
+        )
+
+        self.page.b_Telecharger_BD_PT.clicked.connect(
+              self.on_telecharger_bd_pt
+        )
+
+        self.page.b_Telecharger_BD_Entrainement.clicked.connect(
+              self.on_telecharger_bd_entrainement
         )
 
     def on_recreer_modeles (self):
@@ -155,3 +165,48 @@ class ParametresNavigation:
                 "En développement...",
                 "Cette fonction n'est pas encore mise en place."
             )
+
+    def on_telecharger_bd_pt (self):
+                bd_pt=self.data_service.bd_pt
+                if  not os.path.exists (bd_pt) :
+                    QMessageBox.information(self.page, "Erreur", "La Base de produits traités n'exist pas encore.")
+                    return
+        
+                path, _ = QFileDialog.getSaveFileName(
+                    self.page,
+                    "Enregistrer le résultat en Excel",
+                    str(Path.home() / "base_produits_traites.xlsx"),
+                    "Fichiers Excel (*.xlsx)"
+                )
+                if not path:
+                    return
+        
+                try:
+                    self.data_service.exporter_bd_pt_excel(path)
+                    QMessageBox.information(self.page, "Export Excel", "Fichier Excel enregistré avec succès.")
+                except Exception as exc:
+                    QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier Excel : {exc}")
+
+
+    def on_telecharger_bd_entrainement (self):
+                    bd_entrainement=self.data_service.bd_entrainement
+                    if  not os.path.exists (bd_entrainement) :
+                        QMessageBox.information(self.page, "Erreur", "La Base d'entrainement n'exist pas encore.")
+                        return
+            
+                    path, _ = QFileDialog.getSaveFileName(
+                        self.page,
+                        "Enregistrer le résultat en Excel",
+                        str(Path.home() / "base_entrainement.xlsx"),
+                        "Fichiers Excel (*.xlsx)"
+                    )
+                    if not path:
+                        return
+            
+                    try:
+                        self.data_service.exporter_bd_entrainement_excel(path)
+                        QMessageBox.information(self.page, "Export Excel", "Fichier Excel enregistré avec succès.")
+                    except Exception as exc:
+                        QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier Excel : {exc}")
+            
+    
