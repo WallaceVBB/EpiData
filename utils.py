@@ -17,6 +17,7 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 # Nom du sous-dossier de l'application dans le répertoire de données de l'utilisateur
 NOM_APPLICATION = "EpiData"
+VERSION = "0.1.0"
 
 # Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
@@ -74,6 +75,15 @@ FICHIERS_RESSOURCES = [
     ("poids_moyen_fl.csv", "parametres"),
     ("traitement_appertises.csv", "parametres"),
     ("unites_poids.csv", "parametres"),
+    ("Accueil.ui", "gui"),
+    ("Convertisseur_PDF_resultats.ui", "gui"),
+    ("Convertisseur_PDF_selecteur.ui", "gui"),
+    ("Convertisseur_PDF_chargement.ui", "gui"),
+    ("mainwindow.ui", "gui"),
+    ("Parametres.ui", "gui"),
+    ("Traitement_chargement.ui", "gui"),
+    ("Traitement_resultats.ui", "gui"),
+    ("Traitement_selecteur.ui", "gui"),
 ]
 
 # Créer les répertoires nécessaires si ils n'existent pas
