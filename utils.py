@@ -14,6 +14,8 @@ from rich.console import Console
 console = Console() # console pour enrichir les impressions dans le terminal (complément pour la fonction print)
 
 # Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
+NOM_APPLICATION = "EpiData"
+VERSION = "0.1.0"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 
 def _est_empaquete():
@@ -48,10 +50,6 @@ def _determiner_user_app_dir():
 
 ### Code
 USER_APP_DIR = _determiner_user_app_dir() # répertoire utilisateur pour stocker les fichiers de l'application
-
-# Nom du sous-dossier de l'application dans le répertoire de données de l'utilisateur
-NOM_APPLICATION = "EpiData"
-VERSION = "0.1.0"
 FICHIER_VERSION = os.path.join(USER_APP_DIR, ".version") 
 
 # Définir les chemins vers les sous-dossiers et fichiers
