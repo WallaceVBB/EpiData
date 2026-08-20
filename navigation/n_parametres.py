@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox, QFileDialog
 from services import DataService
 from gestion_ml import GestionML
 from utils import console
+import maj_logiciel
 
 class ParametresNavigation:
     """Navigation et actions de la page de paramètres du logiciel."""
@@ -159,12 +160,22 @@ class ParametresNavigation:
             "Cette fonction n'est pas encore mise en place."
         )
 
-    def on_maj_logiciel (self):
-             QMessageBox.information(
-                self.page,
-                "En développement...",
-                "Cette fonction n'est pas encore mise en place."
-            )
+    def on_maj_logiciel(self):  
+        self._thread = QThread()  
+        self._worker = MajWorker()  
+        self._worker.moveToThread(self._thread)  
+        self._thread.started.connect(self._worker.verifier)  
+  
+        self._worker.aucune_maj.connect(  
+            lambda: QMessageBox.information(self.page, "Mise à jour",  
+                                            "EpiData est déjà à jour.")  
+        )  
+        self._worker.maj_disponible.connect(self._demander_telechargement)  
+        self._worker.erreur.connect(  
+            lambda msg: QMessageBox.warning(self.page, "Mise à jour",  
+                                            f"Vérification impossible : {msg}")  
+        )  
+        self._thread.start()  
 
     def on_telecharger_bd_pt (self):
                 bd_pt=self.data_service.bd_pt
@@ -208,5 +219,16 @@ class ParametresNavigation:
                         QMessageBox.information(self.page, "Export Excel", "Fichier Excel enregistré avec succès.")
                     except Exception as exc:
                         QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier Excel : {exc}")
-            
+  
+    def _demander_telechargement(self, info):  
+        rep = QMessageBox.question(  
+            self.page, "Mise à jour disponible",  
+            f"Version {info['version']} disponible. Télécharger et installer ?",  
+            QMessageBox.Yes | QMessageBox.No,  
+        )  
+        if rep != QMessageBox.Yes:  
+            return  
+        # relancer le worker en mode téléchargement...  
+        self._worker.termine_download.connect(maj_logiciel.appliquer_maj)  
+        self._worker.telecharger(info)        
     

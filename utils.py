@@ -13,16 +13,6 @@ from rich.console import Console
 ## Préparation du Console pour faciliter debug
 console = Console() # console pour enrichir les impressions dans le terminal (complément pour la fonction print)
 
-### Code
-
-# Nom du sous-dossier de l'application dans le répertoire de données de l'utilisateur
-NOM_APPLICATION = "EpiData"
-VERSION = "0.1.0"
-
-# Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
-VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
-
-
 def _est_empaquete():
     """Indique si l'application est exécutée depuis un exécutable PyInstaller."""
     return getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS')
@@ -53,7 +43,16 @@ def _determiner_user_app_dir():
     return os.path.dirname(os.path.abspath(__file__))
 
 
+### Code
 USER_APP_DIR = _determiner_user_app_dir() # répertoire utilisateur pour stocker les fichiers de l'application
+
+# Nom du sous-dossier de l'application dans le répertoire de données de l'utilisateur
+NOM_APPLICATION = "EpiData"
+VERSION = "0.1.0"
+FICHIER_VERSION = os.path.join(USER_APP_DIR, ".version") 
+
+# Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
+VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 
 # Définir les chemins vers les sous-dossiers et fichiers
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
@@ -103,31 +102,39 @@ def ressource_path (relative_path):
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
-def assurer_fichier_utilisateur (nom_fichier, sous_dossier=None):
+def assurer_fichier_utilisateur(nom_fichier, sous_dossier=None, forcer=False):  
     """Assure que le fichier spécifié existe dans le directoire utilisateur.
-    Si le fichier n'existe pas, il est copié depuis les ressources de l'application."""
-
-    if sous_dossier:
-        dossier_utilisateur = os.path.join(USER_APP_DIR, sous_dossier)
-        os.makedirs(dossier_utilisateur, exist_ok=True)
-    else:
-        dossier_utilisateur = USER_APP_DIR
-
-    chemin_fichier_utilisateur = os.path.join(dossier_utilisateur, nom_fichier)
-    chemin_bundle = ressource_path(os.path.join(sous_dossier, nom_fichier) if sous_dossier else nom_fichier)
-
-    if not os.path.exists(chemin_fichier_utilisateur) and os.path.exists(chemin_bundle):
-        if os.path.abspath(chemin_bundle) != os.path.abspath(chemin_fichier_utilisateur):
-            shutil.copy(chemin_bundle, chemin_fichier_utilisateur)
-
+    Si le fichier n'existe pas ou est une version ancienne, 
+    il est copié depuis les ressources de l'application."""
+    if sous_dossier:  
+        dossier_utilisateur = os.path.join(USER_APP_DIR, sous_dossier)  
+        os.makedirs(dossier_utilisateur, exist_ok=True)  
+    else:  
+        dossier_utilisateur = USER_APP_DIR  
+  
+    chemin_fichier_utilisateur = os.path.join(dossier_utilisateur, nom_fichier)  
+    chemin_bundle = ressource_path(  
+        os.path.join(sous_dossier, nom_fichier) if sous_dossier else nom_fichier  
+    )  
+  
+    doit_copier = forcer or not os.path.exists(chemin_fichier_utilisateur)  
+    if doit_copier and os.path.exists(chemin_bundle):  
+        if os.path.abspath(chemin_bundle) != os.path.abspath(chemin_fichier_utilisateur):  
+            shutil.copy(chemin_bundle, chemin_fichier_utilisateur)  
+  
     return chemin_fichier_utilisateur
 
-def copier_fichier_ressource_vers_utilisateur ():
-    """"Copie les fichiers nécessaires depuis les ressources de l'application vers le
-    dossier utilisateur lors de la première exécution."""
-
-    for nom_fichier, sous_dossier in FICHIERS_RESSOURCES:
-        assurer_fichier_utilisateur(nom_fichier, sous_dossier)
+def copier_fichier_ressource_vers_utilisateur():  
+    """Copie les ressources vers le dossier utilisateur.  
+    Force la re-copie si la VERSION a changé depuis la dernière fois."""  
+    version_installee = _lire_version_installee()  
+    nouvelle_version = version_installee != VERSION  # True au 1er lancement ou après MAJ  
+  
+    for nom_fichier, sous_dossier in FICHIERS_RESSOURCES:  
+        assurer_fichier_utilisateur(nom_fichier, sous_dossier, forcer=nouvelle_version)  
+  
+    if nouvelle_version:  
+        _ecrire_version_installee()
 
 def nettoyer_texte (texte):
     """Nettoie et normalise le texte (source unique utilisée par le traitement et le ML)."""
@@ -135,3 +142,16 @@ def nettoyer_texte (texte):
     texte = re.sub(r'[^\w\s-]', '', texte)
     texte = re.sub(r'\s+', ' ', texte).strip()
     return texte
+
+def _lire_version_installee():  
+    """Version des ressources déjà copiées dans USER_APP_DIR (None si absente)."""  
+    try:  
+        with open(FICHIER_VERSION, "r", encoding="utf-8") as f:  
+            return f.read().strip()  
+    except FileNotFoundError:  
+        return None  
+  
+def _ecrire_version_installee():  
+    with open(FICHIER_VERSION, "w", encoding="utf-8") as f:  
+        f.write(VERSION)  
+

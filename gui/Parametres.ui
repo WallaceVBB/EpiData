@@ -194,7 +194,7 @@
        <item>
         <widget class="QPushButton" name="b_MAJ_Logiciel">
          <property name="enabled">
-          <bool>false</bool>
+          <bool>true</bool>
          </property>
          <property name="text">
           <string>Mettre à jour le logiciel</string>
