@@ -75,6 +75,7 @@ class MajGestion ():
             "taille": asset.get("size", 0),  
         }  
     
+    @staticmethod
     def telecharger_asset(url, nom_fichier, callback_progression=None):  
         """Télécharge l'asset dans USER_APP_DIR. Retourne le chemin local."""  
         destination = os.path.join(USER_APP_DIR, nom_fichier)  
@@ -90,6 +91,7 @@ class MajGestion ():
                         callback_progression(int(telecharge * 100 / total))  
         return destination  
     
+    @staticmethod
     def appliquer_maj(chemin_installeur):  
         """Lance l'installeur/AppImage puis ferme l'application."""  
         systeme = platform.system()  
@@ -107,15 +109,16 @@ class MajGestion ():
         # ferme l'app pour libérer le binaire  
         sys.exit(0)
 
+    @staticmethod
     def _lancer_updater_linux(nouveau, ancien):  
         """Écrit un script shell qui attend la fermeture, remplace l'AppImage, relance."""  
         script = os.path.join(USER_APP_DIR, "updater.sh")  
         contenu = f"""#!/usr/bin/env bash  
-    sleep 2  
-    mv -f "{nouveau}" "{ancien}"  
-    chmod +x "{ancien}"  
-    exec "{ancien}" &  
-    """  
+sleep 2  
+mv -f "{nouveau}" "{ancien}"  
+chmod +x "{ancien}"  
+exec "{ancien}" &  
+"""  
         with open(script, "w") as f:  
             f.write(contenu)  
         os.chmod(script, 0o755)  

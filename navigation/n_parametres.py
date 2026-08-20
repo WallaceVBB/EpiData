@@ -2,17 +2,21 @@
 
 import os  
 from pathlib import Path  
-from PySide6.QtWidgets import QMessageBox, QFileDialog, QThread
+from PySide6.QtCore import QThread, Signal, QObject, Slot  
+from PySide6.QtWidgets import QMessageBox, QProgressDialog, QFileDialog  
 
 from services import DataService
 from gestion_ml import GestionML
-from utils import console
+from utils import console,_est_empaquete
 from maj_logiciel import MajWorker, MajGestion
 
-class ParametresNavigation:
+class ParametresNavigation(QObject):
     """Navigation et actions de la page de paramètres du logiciel."""
 
+    demande_telechargement = Signal(dict) # signal qui déclenchera telecharger() dans le worker  
+
     def __init__(self, page_widget, show_page_callback, pages, data_service):
+        super().__init__()
         self.page = page_widget
         self.pages = pages
         self.show_page = show_page_callback
@@ -160,6 +164,13 @@ class ParametresNavigation:
         )
 
     def on_maj_logiciel(self):  
+        if not _est_empaquete():  
+            QMessageBox.information(  
+                self.page, "Mise à jour",  
+                "La mise à jour n'est disponible que dans la version installée du logiciel."  
+            )  
+            return
+
         self._thread = QThread()  
         self._worker = MajWorker()  
         self._worker.moveToThread(self._thread)  
@@ -174,6 +185,12 @@ class ParametresNavigation:
             lambda msg: QMessageBox.warning(self.page, "Mise à jour",  
                                             f"Vérification impossible : {msg}")  
         )  
+
+        self.demande_telechargement.connect(self._worker.telecharger) 
+
+        # progression -> barre de chargement  
+        self._worker.termine_download.connect(self._on_download_fini)  
+
         self._thread.start()  
 
     def on_telecharger_bd_pt (self):
@@ -227,7 +244,17 @@ class ParametresNavigation:
         )  
         if rep != QMessageBox.Yes:  
             return  
-        # relancer le worker en mode téléchargement...  
-        self._worker.termine_download.connect(MajGestion.appliquer_maj)  
-        self._worker.telecharger(info)        
+
+        # barre de progression connectée au signal du worker  
+        self._progress = QProgressDialog("Téléchargement...", "Annuler", 0, 100, self.page)  
+        self._worker.progression.connect(self._progress.setValue)  
+  
+        # ✅ on ÉMET un signal au lieu d'appeler directement -> exécution dans le thread worker  
+        self.demande_telechargement.emit(info)        
+
+    @Slot(str)  
+    def _on_download_fini(self, chemin):  
+        self._progress.close()  
+        import maj_logiciel  
+        maj_logiciel.MajGestion.appliquer_maj(chemin)  
     

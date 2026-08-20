@@ -6,8 +6,7 @@ block_cipher = None
 hidden = []  
 datas = [  
     ('gui', 'gui'),  
-    ('parametres', 'parametres'),  
-    ('donnees', 'donnees'),  
+    ('parametres', 'parametres'),
 ]  
   
 # scikit-learn + scipy (dépendance) : sous-modules chargés dynamiquement  
