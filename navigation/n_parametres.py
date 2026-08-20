@@ -2,12 +2,12 @@
 
 import os  
 from pathlib import Path  
-from PySide6.QtWidgets import QMessageBox, QFileDialog
+from PySide6.QtWidgets import QMessageBox, QFileDialog, QThread
 
 from services import DataService
 from gestion_ml import GestionML
 from utils import console
-import maj_logiciel
+from maj_logiciel import MajWorker, MajGestion
 
 class ParametresNavigation:
     """Navigation et actions de la page de paramètres du logiciel."""
@@ -55,7 +55,6 @@ class ParametresNavigation:
         )
 
     def on_recreer_modeles (self):
-        #TODO : mettre en QThread ou rajouter une barre de chargement en deuxième fênetre pour éviter que l'utilisateur ne comprennent pas l'application congelée
         answer = QMessageBox.question(
             self.page,
             "Récréation des modèles de prediction",
@@ -229,6 +228,6 @@ class ParametresNavigation:
         if rep != QMessageBox.Yes:  
             return  
         # relancer le worker en mode téléchargement...  
-        self._worker.termine_download.connect(maj_logiciel.appliquer_maj)  
+        self._worker.termine_download.connect(MajGestion.appliquer_maj)  
         self._worker.telecharger(info)        
     

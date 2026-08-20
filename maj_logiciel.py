@@ -5,7 +5,8 @@ import sys
 import platform  
 import subprocess  
 import requests  
-from packaging import version  
+from packaging import version
+from PySide6.QtCore import QObject, Signal
   
 from utils import VERSION, USER_APP_DIR, console  
   
@@ -21,7 +22,7 @@ class MajWorker(QObject):
   
     def verifier(self):  
         try:  
-            info = maj_logiciel.verifier_maj()  
+            info = MajGestion.verifier_maj()  
             if info:  
                 self.maj_disponible.emit(info)  
             else:  
@@ -31,7 +32,7 @@ class MajWorker(QObject):
   
     def telecharger(self, info):  
         try:  
-            chemin = maj_logiciel.telecharger_asset(  
+            chemin = MajGestion.telecharger_asset(  
                 info["url"], info["nom_fichier"],  
                 callback_progression=self.progression.emit  
             )  
@@ -39,13 +40,15 @@ class MajWorker(QObject):
         except Exception as e:  
             self.erreur.emit(str(e))
 
-class MajGestion:
+class MajGestion ():
+    @staticmethod
     def _extension_asset_attendue():  
         """Extension de l'asset selon l'OS courant."""  
         if platform.system() == "Windows":  
             return ".exe"      # installeur Inno Setup  
         return ".AppImage"     # Linux  
     
+    @staticmethod
     def verifier_maj():  
         """Interroge GitHub. Retourne un dict si une MAJ existe, sinon None.  
         Lève une exception en cas d'erreur réseau."""  
@@ -57,7 +60,7 @@ class MajGestion:
         if version.parse(tag) <= version.parse(VERSION):  
             return None                            # déjà à jour  
     
-        ext = _extension_asset_attendue()  
+        ext = MajGestion._extension_asset_attendue()  
         asset = next(  
             (a for a in data.get("assets", []) if a["name"].endswith(ext)),  
             None  
@@ -98,7 +101,7 @@ class MajGestion:
             os.chmod(chemin_installeur, 0o755)  
             if appimage_courant:  
                 # petit script externe qui attend, remplace, relance  
-                _lancer_updater_linux(chemin_installeur, appimage_courant)  
+                MajGestion._lancer_updater_linux(chemin_installeur, appimage_courant)  
             else:  
                 subprocess.Popen([chemin_installeur], close_fds=True)  
         # ferme l'app pour libérer le binaire  
