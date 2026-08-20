@@ -12,12 +12,14 @@ from PySide6.QtWidgets import (
     QSplashScreen,
     QVBoxLayout,
     QWidget,
+    QMessageBox,
 )
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_extracteur_factures import FactureNavigation
 from navigation.n_parametres import ParametresNavigation
 from services import DataService
-from utils import console, GUI_DIR, NAVIGATION_DIR, copier_fichier_ressource_vers_utilisateur
+from utils import console, GUI_DIR, NAVIGATION_DIR, copier_fichier_ressource_vers_utilisateur,  _est_empaquete
+from maj_logiciel import MajWorker, MajGestion 
 
 class Application:
     def __init__(self):
@@ -134,6 +136,52 @@ class Application:
     
         # Affichage de la page  
         self.window.stackedWidget.setCurrentWidget(page)
+
+    def _verifier_maj_au_demarrage(self):  
+        # Ne rien faire en développement (sys.executable = python)  
+        if not _est_empaquete():  
+            return  
+  
+        self._thread_maj = QThread()  
+        self._worker_maj = MajWorker()  
+        self._worker_maj.moveToThread(self._thread_maj)  
+  
+        # Déclenche verifier() DANS le thread  
+        self._thread_maj.started.connect(self._worker_maj.verifier)  
+  
+        # SILENCIEUX : on ne connecte QUE le cas "mise à jour disponible"  
+        self._worker_maj.maj_disponible.connect(self._proposer_maj_demarrage)  
+  
+        # aucune_maj et erreur : on ne fait rien (ou un simple log)  
+        self._worker_maj.aucune_maj.connect(lambda: console.log("À jour"))  
+        self._worker_maj.erreur.connect(lambda msg: console.log(f"MAJ ignorée: {msg}"))  
+  
+        # Nettoyage du thread  
+        self._worker_maj.maj_disponible.connect(self._thread_maj.quit)  
+        self._worker_maj.aucune_maj.connect(self._thread_maj.quit)  
+        self._worker_maj.erreur.connect(self._thread_maj.quit)  
+        self._thread_maj.finished.connect(self._thread_maj.deleteLater)  
+  
+        self._thread_maj.start()  
+  
+    def _proposer_maj_demarrage(self, info):  
+        rep = QMessageBox.question(  
+            self.window, "Mise à jour disponible",  
+            f"La version {info['version']} est disponible. Télécharger et installer ?",  
+            QMessageBox.Yes | QMessageBox.No,  
+        )  
+        if rep != QMessageBox.Yes:
+            return
+
+        # télécharger dans un thread pour ne pas geler l'UI  
+        self._thread_dl = QThread()  
+        self._worker_dl = MajWorker()  
+        self._worker_dl.moveToThread(self._thread_dl)  
+        self._thread_dl.started.connect(lambda: self._worker_dl.telecharger(info))  
+        self._worker_dl.termine_download.connect(MajGestion.appliquer_maj)  
+        self._worker_dl.termine_download.connect(self._thread_dl.quit)  
+        self._worker_dl.erreur.connect(self._thread_dl.quit)  
+        self._thread_dl.start()
 
     def run(self):
         # Affichage de la fenêtre principale
