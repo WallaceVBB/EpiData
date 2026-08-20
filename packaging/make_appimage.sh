@@ -3,7 +3,7 @@
 set -euo pipefail  
   
 APP=EpiData  
-VERSION="${APP_VERSION:-0.0.0}"  
+VERSION="${APP_VERSION#v}"  
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"   # racine du repo  
 DIST="$ROOT/dist/$APP"  
 APPDIR="$ROOT/$APP.AppDir"  

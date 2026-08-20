@@ -25,16 +25,21 @@ jobs:
       - name: Build PyInstaller (onedir)  
         run: pyinstaller EpiData.spec  
   
-      - name: Créer l'installeur Inno Setup  
+      - name: Déterminer la version  
+        shell: bash  
+        run: echo "APP_VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
+
+      - name: Créer l'installeur Inno Setup
         run: |  
-          "%programfiles(x86)%\Inno Setup 6\ISCC.exe" installer\EpiData.iss  
-        shell: cmd  
+          choco install innosetup -y
+          "%programfiles(x86)%\Inno Setup 6\ISCC.exe" packaging\EpiData.iss  
+        shell: cmd
   
       - name: Upload artefact Windows  
         uses: actions/upload-artifact@v4  
         with:  
           name: windows-installer  
-          path: installer\Output\*.exe  
+          path: packaging\Output\*.exe  
   
   # ----------------- LINUX -----------------  
   build-linux:  
@@ -58,14 +63,12 @@ jobs:
           pip install pyinstaller  
   
       - name: Build PyInstaller (onedir)  
-        run: pyinstaller EpiData.spec  
-  
+        run: pyinstaller EpiData.spec
+        
       - name: Construire l'AppImage  
-        run: |  
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage  
-          chmod +x linuxdeploy-x86_64.AppImage  
-          # préparer l'AppDir à partir de dist/EpiData  
-          bash packaging/make_appimage.sh  
+        run: bash packaging/make_appimage.sh  
+        env:  
+          APP_VERSION: ${{ github.ref_name }}
   
       - name: Upload artefact Linux  
         uses: actions/upload-artifact@v4  

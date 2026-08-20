@@ -1,5 +1,5 @@
 ; packaging/EpiData.iss  
-#define MyAppName "EpiData"  
+#define MyAppName "EpiData"
 #define MyAppVersion GetEnv('APP_VERSION')   ; injectée par la CI (ex: 1.2.0)  
 #define MyAppExeName "EpiData.exe"  
   
