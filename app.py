@@ -95,8 +95,8 @@ class Application:
         self.pages["traitement_chargement"] = self.load_gui("Traitement_chargement.ui")
         self.pages["traitement_resultats"] = self.load_gui("Traitement_resultats.ui")
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
-        self.pages["convertisseur_pdf_chargement"] = self.load_gui("ConvetisseurPDF_chargement.ui")
-        self.pages["convertisseur_pdf_resultats"] = self.load_gui("Convertisseur_PDF_resultats.ui")
+        self.pages["convertisseur_pdf_chargement"] = self.load_gui("ConvertisseurPDF_chargement.ui")
+        self.pages["convertisseur_pdf_resultats"] = self.load_gui("ConvertisseurPDF_resultats.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
         # Ajout de chaque page au QStackedWidget

@@ -113,7 +113,7 @@ class MajGestion ():
     def _lancer_updater_linux(nouveau, ancien):  
         """Écrit un script shell qui attend la fermeture, remplace l'AppImage, relance."""  
         script = os.path.join(USER_APP_DIR, "updater.sh")  
-        contenu = f"""#!/usr/bin/env bash  
+        contenu = f"""#!/usr/bin/env bash
 sleep 2  
 mv -f "{nouveau}" "{ancien}"  
 chmod +x "{ancien}"  

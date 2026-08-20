@@ -13,6 +13,9 @@ from rich.console import Console
 ## Préparation du Console pour faciliter debug
 console = Console() # console pour enrichir les impressions dans le terminal (complément pour la fonction print)
 
+# Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
+VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
+
 def _est_empaquete():
     """Indique si l'application est exécutée depuis un exécutable PyInstaller."""
     return getattr(sys, 'frozen', False) or hasattr(sys, '_MEIPASS')
@@ -50,9 +53,6 @@ USER_APP_DIR = _determiner_user_app_dir() # répertoire utilisateur pour stocker
 NOM_APPLICATION = "EpiData"
 VERSION = "0.1.0"
 FICHIER_VERSION = os.path.join(USER_APP_DIR, ".version") 
-
-# Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
-VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 
 # Définir les chemins vers les sous-dossiers et fichiers
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
