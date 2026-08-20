@@ -711,8 +711,10 @@ class TraitementNavigation:
                 donnees_modifiees[colonne] = item.text()
 
         # Appliquer la correction (a_reviser = False, est_corrige = True)
-        donnees_modifiees['a_reviser'] = False
-        donnees_modifiees['est_corrige'] = True
+        est_corrige = donnees_modifiees.get('est_corrige', False)  
+        donnees_modifiees['est_corrige'] = est_corrige  
+        if est_corrige:  
+            donnees_modifiees['a_reviser'] = False
 
         # Mettre à jour la base de données
         try:
@@ -723,11 +725,22 @@ class TraitementNavigation:
                 console.print(f"[green]Produit {produit_id} mis à jour avec succès")
                 # Mettre à jour le DataFrame local (via .loc pour éviter les
                 # avertissements/bugs liés à l'indexation chaînée de pandas).
-                if self.current_results_df is not None and row_index < len(self.current_results_df):
-                    index_ligne = self.current_results_df.index[row_index]
-                    for col, val in donnees_modifiees.items():
-                        if col in self.current_results_df.columns:
-                            self.current_results_df.loc[index_ligne, col] = val
+                if self.current_results_df is not None and row_index < len(self.current_results_df):  
+                    index_ligne = self.current_results_df.index[row_index]  
+                    for col, val in donnees_modifiees.items():  
+                        if col in self.current_results_df.columns:  
+                            dtype = self.current_results_df[col].dtype  
+                            try:  
+                                if pd.api.types.is_bool_dtype(dtype):  
+                                    cast_val = bool(val)  
+                                elif pd.api.types.is_numeric_dtype(dtype):  
+                                    # gère les chaînes vides / non numériques -> NaN  
+                                    cast_val = pd.to_numeric(val, errors='coerce')  
+                                else:  
+                                    cast_val = val  
+                            except (ValueError, TypeError):  
+                                cast_val = val  
+                            self.current_results_df.loc[index_ligne, col] = cast_val
             else:
                 QMessageBox.warning(self.page, "Erreur", f"Impossible de mettre à jour le produit {produit_id}")
         except Exception as e:
