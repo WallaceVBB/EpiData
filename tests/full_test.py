@@ -55,6 +55,11 @@ def analyser_arguments():
         help="Utilise recreer_modeles() (supprime les .joblib existants) au lieu de creer_modeles().",
     )
     analyseur.add_argument(
+        "--sans-ml",
+        action="store_true",
+        help="N'exécute que les étapes qui ne nécessitent aucun entraînement (export CSV, pagination).",
+    )
+    analyseur.add_argument(
         "--garder",
         action="store_true",
         help="Conserve le répertoire de données à la fin (implicite avec --user-dir).",
@@ -229,6 +234,106 @@ def etape_second_passage(data_service, gestion_ml, chemin_csv, resultats):
     verifier(len(data_service.obtenir_produits()) == len(resultats), "aucun doublon n'est inséré en base")
 
 
+def etape_export_csv(data_service):
+    etape(9, "Export CSV par lots de la base de produits traités")
+    produits = [
+        {
+            'texte_brut': f"PRODUIT EXPORT {index}",
+            'texte_propre': f"produit export {index}",
+            'code_produit': f"EXPORT-{index:05d}",
+            'base_variante': 'tomate grappe',
+            'confiance_basevariante': 90.0,
+            'methode_prediction': 'TF-IDF_Cosine',
+            'a_reviser': False,
+            'est_corrige': False,
+        }
+        for index in range(25)
+    ]
+    for produit in produits:
+        data_service.inserer_produit(produit)
+    data_service.valider()
+
+    nombre_en_base = len(data_service.obtenir_produits())
+    chemin_csv = os.path.join(REPERTOIRE_DONNEES, "export_bd_pt.csv")
+
+    progressions = []
+    resultat = data_service.exporter_bd_pt_csv(
+        chemin_csv,
+        chunksize=10,
+        progress_callback=lambda pourcentage, message: progressions.append((pourcentage, message)),
+    )
+    verifier(resultat is True, "exporter_bd_pt_csv retourne True")
+    verifier(os.path.exists(chemin_csv), f"le fichier CSV est créé : {chemin_csv}")
+
+    df_export = pd.read_csv(chemin_csv)
+    verifier(len(df_export) == nombre_en_base, f"le CSV contient {len(df_export)} lignes (= produits en base)")
+    verifier('code_produit' in df_export.columns and 'base_variante' in df_export.columns, "l'en-tête du CSV est présent")
+    verifier(bool(progressions) and progressions[-1][0] == 100, "le callback de progression atteint 100%")
+
+
+def etape_pagination():
+    etape(10, "Pagination du tableau de résultats")
+    os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+    from PySide6.QtUiTools import QUiLoader
+    from PySide6.QtWidgets import QApplication
+
+    from navigation.n_traitement import TAILLE_PAGE_RESULTATS, TraitementNavigation
+
+    application = QApplication.instance() or QApplication([])
+    chemin_ui = utils.ressource_path(os.path.join("gui", "Traitement_resultats.ui"))
+    page = QUiLoader().load(chemin_ui)
+    verifier(page is not None, "la page Traitement_resultats.ui se charge")
+    for nom in ("b_Page_Precedente", "b_Page_Suivante", "label_Pagination"):
+        verifier(hasattr(page, nom), f"le .ui expose le widget de pagination {nom}")
+
+    nombre_lignes = TAILLE_PAGE_RESULTATS + 500
+    df = pd.DataFrame({
+        'id': range(1, nombre_lignes + 1),
+        'code_produit': [f"PAGE-{index:06d}" for index in range(nombre_lignes)],
+        'texte_brut': [f"PRODUIT {index}" for index in range(nombre_lignes)],
+        'base_variante': ['tomate grappe'] * nombre_lignes,
+        'est_corrige': [False] * nombre_lignes,
+    })
+
+    pages = {'traitement_resultats': page}
+    navigation = TraitementNavigation(page, lambda _nom: None, pages)
+    navigation.current_results_df = df
+    navigation._populate_results_table(df)
+
+    verifier(navigation._nb_pages == 2, f"_nb_pages vaut {navigation._nb_pages} pour {nombre_lignes} lignes")
+    verifier(
+        navigation._results_model.rowCount() == TAILLE_PAGE_RESULTATS,
+        f"le modèle source ne contient que {TAILLE_PAGE_RESULTATS} lignes",
+    )
+    verifier(len(navigation._produits_id_map) == TAILLE_PAGE_RESULTATS, "la carte des produits ne couvre que la page")
+    verifier(navigation._produits_id_map[0]['id'] == 1, "la première ligne de la page 1 correspond au premier produit")
+    verifier(not page.b_Page_Precedente.isEnabled() and page.b_Page_Suivante.isEnabled(), "boutons cohérents sur la page 1")
+
+    navigation.on_page_suivante()
+    verifier(navigation._page_courante == 1, "on_page_suivante passe à la page 2")
+    verifier(navigation._results_model.rowCount() == 500, "la dernière page ne contient que les lignes restantes")
+    verifier(set(navigation._produits_id_map) == set(range(500)), "les clés de la carte sont les indices locaux de la page")
+    verifier(
+        navigation._produits_id_map[0]['id'] == TAILLE_PAGE_RESULTATS + 1,
+        "la première ligne de la page 2 correspond au produit global suivant",
+    )
+    verifier(page.b_Page_Precedente.isEnabled() and not page.b_Page_Suivante.isEnabled(), "boutons cohérents sur la dernière page")
+
+    # Édition sur la page 2 : l'index global doit viser la bonne ligne du DataFrame complet.
+    index_global = navigation._page_courante * TAILLE_PAGE_RESULTATS + 10
+    verifier(
+        df.iloc[index_global]['code_produit'] == navigation._produits_id_map[10]['original_data']['code_produit'],
+        "l'index global d'édition pointe sur la ligne éditée du DataFrame complet",
+    )
+
+    navigation.on_page_precedente()
+    verifier(navigation._page_courante == 0, "on_page_precedente revient à la page 1")
+
+    del navigation
+    page.deleteLater()
+
+
 def etape_maj_entrainement(data_service):
     etape(8, "Mise à jour de la base d'entraînement depuis les produits traités")
     resultat = data_service.maj_bd_entrainement()
@@ -242,17 +347,23 @@ def main():
     data_service = None
     code_sortie = 0
     try:
-        chemin_csv = preparer_csv_entree()
+        chemin_csv = None if ARGUMENTS.sans_ml else preparer_csv_entree()
         data_service = etape_base_donnees()
         gestion_ml = GestionML(data_service=data_service)
 
-        etape_base_entrainement(gestion_ml)
-        etape_entrainement(gestion_ml)
-        etape_inference(gestion_ml)
-        resultats = etape_classification(data_service, gestion_ml, chemin_csv)
-        etape_persistance(data_service, resultats)
-        etape_second_passage(data_service, gestion_ml, chemin_csv, resultats)
-        etape_maj_entrainement(data_service)
+        if not ARGUMENTS.sans_ml:
+            etape_base_entrainement(gestion_ml)
+            etape_entrainement(gestion_ml)
+            etape_inference(gestion_ml)
+            resultats = etape_classification(data_service, gestion_ml, chemin_csv)
+            etape_persistance(data_service, resultats)
+            etape_second_passage(data_service, gestion_ml, chemin_csv, resultats)
+            etape_maj_entrainement(data_service)
+        else:
+            print("\n(--sans-ml : étapes 2 à 8 ignorées)")
+
+        etape_export_csv(data_service)
+        etape_pagination()
 
         print("\nTest complet terminé avec succès.")
     except AssertionError as erreur:
