@@ -429,12 +429,71 @@ class DataService:
             os.remove(bd_entrainement)
         self.creer_bd_entrainement
 
-    def exporter_bd_pt_excel(self, chemin):  
-        """Exporte la base de produits traités vers un fichier Excel."""  
-        df = self.obtenir_produits()  
-        if df.empty:  
-            return False  
-        df.to_excel(chemin, index=False)  
+    def exporter_bd_pt_excel(self, chemin, progress_callback=None):
+        """
+        Exporte la base de produits traités vers un fichier Excel.
+
+        La progression est purement indicative : openpyxl écrit le classeur en une
+        seule opération monolithique, impossible à découper en lots.
+        """
+        if progress_callback:
+            progress_callback(5, "Lecture de la base de produits traités...")
+        # Connexion dédiée : cet export peut être exécuté depuis un thread de travail,
+        # alors que self.conn appartient au thread qui a créé le DataService.
+        with sqlite3.connect(self.bd_pt) as conn:
+            df = pd.read_sql("SELECT * FROM produits", conn)
+        if df.empty:
+            return False
+        if progress_callback:
+            progress_callback(30, f"Écriture Excel en cours ({len(df)} lignes)...")
+        df.to_excel(chemin, index=False)
+        if progress_callback:
+            progress_callback(100, f"Export Excel terminé ({len(df)} lignes).")
+        return True
+
+    def exporter_bd_pt_csv(self, chemin, chunksize=50000, progress_callback=None):
+        """
+        Exporte la base de produits traités vers un fichier CSV, par lots.
+
+        L'écriture se fait en flux (un lot à la fois) pour ne jamais charger toute
+        la base en mémoire, contrairement à l'export Excel.
+        """
+        if self.conn is None:
+            return False
+
+        lignes_ecrites = 0
+        premier_lot = True
+        # Connexion dédiée en lecture : cet export peut être exécuté depuis un thread
+        # de travail, alors que self.conn appartient au thread qui a créé le DataService.
+        with sqlite3.connect(self.bd_pt) as conn:
+            try:
+                total = conn.execute("SELECT COUNT(*) FROM produits").fetchone()[0]
+            except Exception as e:
+                console.print(f"[red]Erreur lors du comptage des produits: {e}")
+                return False
+
+            if not total:
+                return False
+
+            for lot in pd.read_sql("SELECT * FROM produits", conn, chunksize=chunksize):
+                lot.to_csv(
+                    chemin,
+                    index=False,
+                    mode='w' if premier_lot else 'a',
+                    header=premier_lot,
+                    encoding='utf-8-sig',
+                )
+                premier_lot = False
+                lignes_ecrites += len(lot)
+                if progress_callback:
+                    pourcentage = int(min(100, lignes_ecrites * 100 / total))
+                    progress_callback(pourcentage, f"{lignes_ecrites} / {total} lignes exportées...")
+
+        if premier_lot:
+            return False
+
+        if progress_callback:
+            progress_callback(100, f"Export CSV terminé ({lignes_ecrites} lignes).")
         return True
 
     def exporter_bd_entrainement_excel(self, chemin):  

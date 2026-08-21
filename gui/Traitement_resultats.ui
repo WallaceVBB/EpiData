@@ -102,6 +102,40 @@
     <widget class="QTableView" name="Tableau_Results"/>
    </item>
    <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_Pagination">
+     <item>
+      <widget class="QPushButton" name="b_Page_Precedente">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>&lt; Page précédente</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QLabel" name="label_Pagination">
+       <property name="alignment">
+        <set>Qt::AlignmentFlag::AlignCenter</set>
+       </property>
+       <property name="text">
+        <string>Aucun résultat</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="b_Page_Suivante">
+       <property name="enabled">
+        <bool>false</bool>
+       </property>
+       <property name="text">
+        <string>Page suivante &gt;</string>
+       </property>
+      </widget>
+     </item>
+    </layout>
+   </item>
+   <item>
     <layout class="QHBoxLayout" name="horizontalLayout">
      <item>
       <widget class="QPushButton" name="b_Supprimer_Resultats">

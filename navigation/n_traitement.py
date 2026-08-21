@@ -1,6 +1,7 @@
 ﻿# Ce fichier fait le lien entre la GUI et le traitement des produits.
 # Il contient les fonctions appelées par les boutons de la GUI pour lancer le traitement.
 
+from math import ceil
 from pathlib import Path
 
 import pandas as pd
@@ -23,6 +24,10 @@ ROLE_VALEUR_PRECEDENTE = Qt.ItemDataRole.UserRole + 2
 WIDGET_COMBO_COLONNES = 'comboBox_Choic_colonnes'
 WIDGET_CHAMP_FILTRE = 'lineEdit_Filtre'
 WIDGET_BOUTON_RESET = 'b_Reset'
+
+# Nombre maximum de lignes affichées simultanément dans le tableau de résultats.
+# Au-delà, le tableau est paginé (le DataFrame complet reste en mémoire).
+TAILLE_PAGE_RESULTATS = 3000
 
 
 class ComboBoxDelegate(QStyledItemDelegate):
@@ -288,6 +293,9 @@ class TraitementNavigation:
         # Modèle source courant (le tableau utilise un proxy de filtrage par-dessus)
         self._results_model = None
         self._filtre_proxy = None
+        # Pagination du tableau de résultats
+        self._page_courante = 0
+        self._nb_pages = 0
 
         self._connect_buttons()
         self._connect_progress_buttons()
@@ -316,6 +324,10 @@ class TraitementNavigation:
                 results_page.b_Telecharger_CSV.clicked.connect(self.on_telecharger_csv)
             if hasattr(results_page, 'b_Autre_Fichier'):
                 results_page.b_Autre_Fichier.clicked.connect(self.on_autre_fichier)
+            if hasattr(results_page, 'b_Page_Precedente'):
+                results_page.b_Page_Precedente.clicked.connect(self.on_page_precedente)
+            if hasattr(results_page, 'b_Page_Suivante'):
+                results_page.b_Page_Suivante.clicked.connect(self.on_page_suivante)
 
     def _configurer_redimensionnement(self):
         """
@@ -496,6 +508,7 @@ class TraitementNavigation:
             return
 
         self.show_page('traitement_resultats')
+        self._page_courante = 0
         self._populate_results_table(self.current_results_df)
 
         if hasattr(results_page, 'b_Supprimer_Resultats'):
@@ -504,7 +517,14 @@ class TraitementNavigation:
             )
 
     def _populate_results_table(self, df):
-        """Peuple le tableau des résultats avec des colonnes éditables et configure les filtres du .ui."""
+        """
+        Peuple le tableau des résultats (page courante uniquement) avec des colonnes
+        éditables et configure les filtres du .ui.
+
+        `df` est le DataFrame COMPLET (source de vérité) : seule la tranche
+        correspondant à `self._page_courante` est chargée dans le modèle Qt, pour ne
+        jamais construire des centaines de milliers de QStandardItem.
+        """
         results_page = self.pages.get('traitement_resultats')
         if not results_page or not hasattr(results_page, 'Tableau_Results'):
             return
@@ -523,7 +543,17 @@ class TraitementNavigation:
             self._filtre_proxy = None
             self._configurer_filtres([])
             self._definir_etat_filtres(False)
+            self._nb_pages = 0
+            self._page_courante = 0
+            self._maj_label_pagination()
             return
+
+        # Découpage en pages : le DataFrame complet reste intact.
+        self._nb_pages = max(1, ceil(len(df) / TAILLE_PAGE_RESULTATS))
+        self._page_courante = max(0, min(self._page_courante, self._nb_pages - 1))
+        debut = self._page_courante * TAILLE_PAGE_RESULTATS
+        fin = debut + TAILLE_PAGE_RESULTATS
+        df_page = df.iloc[debut:fin]
 
         # Filtrer les colonnes visibles
         colonnes_visibles = [col for col in df.columns if col not in colonnes_cachees]
@@ -534,13 +564,14 @@ class TraitementNavigation:
             colonnes_visibles.insert(0, 'est_corrige')
 
         # Créer le modèle de table (source) puis un proxy pour le filtrage
-        model = TableModelEditablePersonnalise(df, colonnes_visibles, self._categories_list)
+        model = TableModelEditablePersonnalise(df_page, colonnes_visibles, self._categories_list)
         model.item_changed.connect(self._on_model_item_changed)
         self._results_model = model
 
-        # Réinitialiser la carte des produits (indices du modèle source, pas du proxy)
+        # Réinitialiser la carte des produits : les clés sont les indices de ligne du
+        # modèle source de la PAGE courante (0 .. len(df_page) - 1), pas les indices globaux.
         self._produits_id_map = {}
-        for row_index, (_, row) in enumerate(df.iterrows()):
+        for row_index, (_, row) in enumerate(df_page.iterrows()):
             produit_id = row.get('id') if 'id' in row.index else None
             self._produits_id_map[row_index] = {
                 'id': produit_id,
@@ -564,6 +595,52 @@ class TraitementNavigation:
 
         self._configurer_filtres(colonnes_visibles)
         self._definir_etat_filtres(True)
+        self._maj_label_pagination()
+
+    def _maj_label_pagination(self):
+        """Met à jour le label et les boutons de pagination du .ui."""
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page:
+            return
+
+        total = len(self.current_results_df) if self.current_results_df is not None else 0
+        debut = self._page_courante * TAILLE_PAGE_RESULTATS
+        fin = min(debut + TAILLE_PAGE_RESULTATS, total)
+
+        label = getattr(results_page, 'label_Pagination', None)
+        if label is not None:
+            if self._nb_pages <= 0 or total == 0:
+                label.setText("Aucun résultat")
+            else:
+                label.setText(
+                    f"Page {self._page_courante + 1} / {self._nb_pages} "
+                    f"— lignes {debut + 1} à {fin} sur {total}"
+                )
+
+        bouton_precedent = getattr(results_page, 'b_Page_Precedente', None)
+        if bouton_precedent is not None:
+            bouton_precedent.setEnabled(self._page_courante > 0)
+
+        bouton_suivant = getattr(results_page, 'b_Page_Suivante', None)
+        if bouton_suivant is not None:
+            bouton_suivant.setEnabled(self._page_courante < self._nb_pages - 1)
+
+    def on_page_precedente(self):
+        self._changer_page(self._page_courante - 1)
+
+    def on_page_suivante(self):
+        self._changer_page(self._page_courante + 1)
+
+    def _changer_page(self, page):
+        if self.current_results_df is None or self.current_results_df.empty:
+            return
+
+        page = max(0, min(page, self._nb_pages - 1))
+        if page == self._page_courante:
+            return
+
+        self._page_courante = page
+        self._populate_results_table(self.current_results_df)
 
     def _widgets_filtres(self):
         """Retourne (combo, champ, bouton_reset) issus du .ui, ou None si absents."""
@@ -587,6 +664,11 @@ class TraitementNavigation:
         Réutilise les widgets déjà définis dans le .ui de traitement_resultats
         (comboBox_Choic_colonnes, lineEdit_Filtre, b_Reset) pour piloter le filtrage
         du tableau, plutôt que de créer une barre de filtres dynamiquement.
+
+        Limite connue : le filtrage s'applique au modèle source, donc uniquement à la
+        page affichée (au plus TAILLE_PAGE_RESULTATS lignes) et non à l'ensemble de la
+        base. Un filtrage global (SQL ou pandas sur le DataFrame complet) est hors
+        périmètre.
         """
         combo, champ, bouton_reset = self._widgets_filtres()
         if combo is None or champ is None:
@@ -725,8 +807,11 @@ class TraitementNavigation:
                 console.print(f"[green]Produit {produit_id} mis à jour avec succès")
                 # Mettre à jour le DataFrame local (via .loc pour éviter les
                 # avertissements/bugs liés à l'indexation chaînée de pandas).
-                if self.current_results_df is not None and row_index < len(self.current_results_df):  
-                    index_ligne = self.current_results_df.index[row_index]  
+                # row_index est local à la page affichée : il faut le ramener à
+                # l'index global du DataFrame complet.
+                index_global = self._page_courante * TAILLE_PAGE_RESULTATS + row_index
+                if self.current_results_df is not None and index_global < len(self.current_results_df):
+                    index_ligne = self.current_results_df.index[index_global]  
                     for col, val in donnees_modifiees.items():  
                         if col in self.current_results_df.columns:  
                             dtype = self.current_results_df[col].dtype  
