@@ -68,22 +68,24 @@ class ParametresNavigation(QObject):
         if answer != QMessageBox.Yes:
             return
 
-        try:
-            GestionML.recreer_modeles()
+        try:  
+            gestion_ml = GestionML(data_service=self.data_service)  
+            gestion_ml.recreer_modeles()  
+  
+            QMessageBox.information(  
+                self.page,  
+                "Recreation des modèles",  
+                "La récréation des modèles a été réalisée avec succès."  
+            )  
+  
+        except Exception as e :  
+            console.print(f"[yellow]Avertissement: impossible de récreer les modeles de ML: {e}")  
+            QMessageBox.critical (  
+                self.page,  
+                "Erreur",  
+                f"Erreur lors de la récréation des modèles: {str(e)}"  
+            )
             
-            QMessageBox.information(
-                self.page,
-                "Recreation des modèles",
-                "La récréation des modèles a été réalisée avec succès."
-            )
-
-        except Exception as e :
-            console.print(f"[yellow]Avertissement: impossible de récreer les modeles de ML: {e}")
-            QMessageBox.critical (
-                self.page,
-                "Erreur",
-                f"Erreur lors de la récréation des modèles: {str(e)}"
-            )
     def on_recreer_bd_entrainement (self):
             answer = QMessageBox.question(
                 self.page,

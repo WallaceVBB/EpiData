@@ -415,10 +415,13 @@ class DataService:
             self.conn = None
 
     def recreer_bd_pt (self):
-        bd_pt = ressource_path(os.path.join(BD_PT))
-        if os.path.exists(bd_pt):
-            os.remove(bd_pt)
+        self.fermer()
+        if os.path.exists(self.bd_pt):
+            os.remove(self.bd_pt)
+        self.conn = sqlite3.connect(self.bd_pt)
+        self.conn.row_factory = sqlite3.Row
         self.creer_bd_pt()
+        self.valider()
 
     def recreer_bd_entrainement (self):
         bd_entrainement = self.bd_entrainement

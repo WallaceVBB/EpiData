@@ -26,7 +26,7 @@ cat > "$APPDIR/AppRun" <<'EOF'
 #!/bin/bash
 HERE="$(dirname "$(readlink -f "${0}")")"
 exec "$HERE/usr/bin/EpiData" "$@"
-EOF  
+EOF
 chmod +x "$APPDIR/AppRun"
   
 # le .desktop et l'icône doivent aussi être à la racine de l'AppDir  

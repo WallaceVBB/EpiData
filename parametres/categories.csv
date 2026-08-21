@@ -1,4 +1,4 @@
-basevariante,aliment,variante,tva,famille,allergenes
+BaseVariante,Produit,Variante,tva,famille,allergenes
 Abondance,Abondance,,-,BOF,
 Abricot en dés,Abricot,en dés,-,Fruits_et_légumes,
 Abricot dénoyauté,Abricot,dénoyauté,-,Fruits_et_légumes,
@@ -3443,3 +3443,5 @@ Coriandoli,Coriandoli,,-,Epicerie,
 Ditalini,Ditalini,,-,Epicerie,
 Eliche,Eliche,,-,Epicerie,
 Fidelini,Fidelini,,-,Epicerie,
+Bergamote,Bergamote,,-,Fruits_et_légumes,
+Burrata,Burrata,,-,BOF,

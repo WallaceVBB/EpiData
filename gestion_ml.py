@@ -19,6 +19,8 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.svm import LinearSVC
+from sklearn.model_selection import train_test_split
+from sklearn.frozen import FrozenEstimator
 
 from services import DataService
 from utils import console, BD_ENTRAINEMENT, MODELES_DIR, nettoyer_texte
@@ -127,14 +129,13 @@ class GestionML:
                 self.preparer_bd_entrainement()
 
                 with sqlite3.connect(self.bd_entrainement_path) as conn:
-                    chunks = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn, chunksize=1000)
-                    donnees = pd.concat(chunks, ignore_index=True)
+                    donnees = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn)
                 progression.update(tache_globale, advance=10)
                 progression.update(tache_etape, advance=1)
 
                 # Nettoyage des données
                 console.print("Nettoyage des données...")
-                donnees = donnees[donnees['base_variante'].map(donnees['base_variante'].value_counts()) >= 4]
+                donnees = donnees[donnees['base_variante'].map(donnees['base_variante'].value_counts()) >= 15]
                 progression.update(tache_globale, advance=10)
                 progression.update(tache_etape, advance=1)
 
@@ -148,14 +149,16 @@ class GestionML:
                 # Configuration des modèles avec LinearSVC
                 svc_params = {
                     'class_weight': 'balanced',
-                    'max_iter': 1000
+                    'max_iter': 1000,
+                    'dual': False,
                 }
 
                 # Modèle base_variante (Méthode 1: LinearSVC)
                 console.print("[blue]Entraînement du modèle base_variante (LinearSVC)...")
                 self.modele_basevariante = CalibratedClassifierCV(
                     LinearSVC(**svc_params),
-                    cv=3
+                    cv=3,
+                    n_jobs=-1
                 ).fit(X, donnees['base_variante'])
                 progression.update(tache_globale, advance=20)
                 progression.update(tache_etape, advance=1)
