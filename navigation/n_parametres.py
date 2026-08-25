@@ -137,7 +137,7 @@ class ParametresNavigation(QObject):
                 return
     
             try:
-                self.data_service.recreer_bd_entrainement()
+                self.data_service.creer_bd_entrainement()
                 
                 QMessageBox.information(
                     self.page,

@@ -195,7 +195,7 @@ class DataService:
         if not os.path.exists(pt_base):
             raise FileNotFoundError(f"Le fichier {pt_base} n'existe pas")
 
-        df = pd.read_csv(pt_base, dtype=str)
+        df = pd.read_csv(pt_base, sep=';', dtype=str)
         if 'designation' not in df.columns or 'base_variante' not in df.columns:
             raise ValueError("Le CSV pt_base.csv doit contenir les colonnes 'designation' et 'base_variante'.")
 
@@ -422,12 +422,6 @@ class DataService:
         self.conn.row_factory = sqlite3.Row
         self.creer_bd_pt()
         self.valider()
-
-    def recreer_bd_entrainement (self):
-        bd_entrainement = self.bd_entrainement
-        if os.path.exists (bd_entrainement):
-            os.remove(bd_entrainement)
-        self.creer_bd_entrainement
 
     def exporter_bd_pt_excel(self, chemin, progress_callback=None):
         """

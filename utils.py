@@ -58,7 +58,6 @@ PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour le
 GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
 NAVIGATION_DIR = os.path.join(USER_APP_DIR, "navigation") # sous-dossier pour les fichiers python de navigation GUI
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
-USER_DONNEES_DIR = os.path.join(USER_APP_DIR, "donnees") # sous-dossier pour les données utilisateur
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des produits traités
 
@@ -88,7 +87,6 @@ os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)
 os.makedirs(PARAMETRES_DIR, exist_ok=True)
 os.makedirs(BD_DIR, exist_ok=True)
-os.makedirs(USER_DONNEES_DIR, exist_ok=True)
 
 def ressource_path (relative_path):
     """Obtient le chemin absolu vers les ressources du programme, que le programme 
