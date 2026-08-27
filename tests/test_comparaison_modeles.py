@@ -61,7 +61,7 @@ warnings.filterwarnings("ignore", category=ConvergenceWarning)
 
 # Filtres de fréquence minimale de classe à tester (donnees['base_variante']
 # doit apparaître au moins ce nombre de fois pour être conservée).
-FILTRES_CLASSE = [4, 6, 10, 15, 20]
+FILTRES_CLASSE = [15, 20]
 
 # Proportion des données réservée à l'évaluation finale (jamais utilisée pour
 # l'entraînement d'aucun modèle, ni pour la calibration).

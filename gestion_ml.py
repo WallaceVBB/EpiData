@@ -111,40 +111,46 @@ class GestionML:
             data_service.creer_bd_entrainement()
         data_service.maj_bd_entrainement()
 
-    def recreer_modeles(self):
+    def recreer_modeles(self, progress_callback=None):
         """Supprime les modèles existants et crée de nouveaux modèles."""
         for fichier in self.NOMS_MODELES:
             chemin_fichier_modele = self.chemin_modele(fichier)
             if os.path.exists(chemin_fichier_modele):
                 os.remove(chemin_fichier_modele)
-        self.creer_modeles()
+        return self.creer_modeles(progress_callback=progress_callback)
 
-    def creer_modeles(self):
+    def creer_modeles(self, progress_callback=None):
         """Crée (entraîne) les modèles de machine learning et les sauvegarde sur disque."""
+
+        def _avancer(avance, message):
+            """Met à jour la progression, via Rich et/ou via le callback fourni."""
+            nonlocal total
+            total += avance
+            progression.update(tache_globale, advance=avance)
+            if progress_callback:
+                progress_callback(total, message)
+
+        total = 0
         try:
             with Progress() as progression:
                 tache_globale = progression.add_task("[cyan]Entraînement global...", total=100)
-                tache_etape = progression.add_task("[magenta]Étape en cours...", total=100)
 
                 self.preparer_bd_entrainement()
 
                 with sqlite3.connect(self.bd_entrainement_path) as conn:
                     donnees = pd.read_sql_query("SELECT designation, base_variante FROM entrainement", conn)
-                progression.update(tache_globale, advance=10)
-                progression.update(tache_etape, advance=1)
+                _avancer(10, "Préparation des données terminée...")
 
                 # Nettoyage des données
                 console.print("Nettoyage des données...")
                 donnees = donnees[donnees['base_variante'].map(donnees['base_variante'].value_counts()) >= 15]
-                progression.update(tache_globale, advance=10)
-                progression.update(tache_etape, advance=1)
+                _avancer(10, "Nettoyage des données terminé...")
 
                 # Vectorialisation de bases variantes
                 self.vectoriseur = TfidfVectorizer(max_features=3000, ngram_range=(1, 2), sublinear_tf=True, min_df=3)
                 textes = donnees['designation'].apply(self.nettoyer_texte).tolist()
                 X = self.vectoriseur.fit_transform(textes)
-                progression.update(tache_globale, advance=20)
-                progression.update(tache_etape, advance=1)
+                _avancer(20, "Vectorisation terminée...")
 
                 # Configuration des modèles avec LinearSVC
                 svc_params = {
@@ -160,8 +166,7 @@ class GestionML:
                     cv=3,
                     n_jobs=-1
                 ).fit(X, donnees['base_variante'])
-                progression.update(tache_globale, advance=20)
-                progression.update(tache_etape, advance=1)
+                _avancer(20, "Entraînement LinearSVC terminé...")
 
                 # Méthode 2: TF-IDF avec Similarité Cosinus
                 console.print("[blue]Entraînement du modèle TF-IDF Cosine...")
@@ -169,13 +174,11 @@ class GestionML:
                 textes_propres = donnees['base_variante'].apply(self.nettoyer_texte).unique().tolist()
                 self.vectoriseur_tfidf_cosine.fit(textes_propres)
 
-                # Sauvegarder les données de référence pour la méthode cosine
                 self.donnees_basevariante_cosine = {
                     'base_variantes': donnees['base_variante'].unique().tolist(),
                     'designations': donnees.groupby('base_variante')['designation'].apply(list).to_dict()
                 }
-                progression.update(tache_globale, advance=10)
-                progression.update(tache_etape, advance=1)
+                _avancer(10, "Entraînement TF-IDF Cosine terminé...")
 
                 # Sauvegarde
                 console.print("Sauvegarde des modèles...")
@@ -184,10 +187,10 @@ class GestionML:
                 joblib.dump(self.modele_basevariante, self.chemin_modele('modele_basevariante.joblib'), compress=3)
                 joblib.dump(self.vectoriseur_tfidf_cosine, self.chemin_modele('vectoriseur_tfidf_cosine.joblib'), compress=3)
                 joblib.dump(self.donnees_basevariante_cosine, self.chemin_modele('donnees_basevariante_cosine.joblib'), compress=3)
-                progression.update(tache_globale, advance=10)
-                progression.update(tache_etape, advance=1)
+                _avancer(10, "Sauvegarde terminée...")
 
                 console.print(f"[bold green]✓ Modèles LinearSVC et TF-IDF Cosine entraînés et sauvegardés dans {self.modeles_dir}")
+                return True
 
         except Exception as e:
             console.print(f"[bold red]✗ Erreur lors de l'entraînement: {e}")

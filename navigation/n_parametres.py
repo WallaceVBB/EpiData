@@ -10,6 +10,63 @@ from gestion_ml import GestionML
 from utils import console,_est_empaquete
 from maj_logiciel import MajWorker, MajGestion
 
+class TraitementModelesWorker(QThread):
+    """Réalise la création des modèles ML hors du thread UI."""
+    progress_updated = Signal(int, str)
+    finished = Signal(bool, str)
+
+    def __init__(self, data_service, parent=None):
+        super().__init__(parent)
+        self.data_service = data_service
+        self.gestion_ml = None
+        self._is_cancelled = False
+
+    def run(self):
+        """Exécute la récréation des modèles dans un thread séparé."""
+        try:
+            self.progress_updated.emit(0, "Initialisation de la récréation des modèles...")
+            
+            # Création de l'instance GestionML dans le thread
+            self.gestion_ml = GestionML(data_service=self.data_service)
+            
+            # Vérification de l'annulation
+            if self._is_cancelled:
+                self.finished.emit(False, "Opération annulée par l'utilisateur.")
+                return
+            
+            self.progress_updated.emit(10, "Préparation des données...")
+            
+            # Appel de la méthode de récréation avec callback de progression
+            success = self.gestion_ml.recreer_modeles(
+                progress_callback=self._on_progress
+            )
+            
+            if self._is_cancelled:
+                self.finished.emit(False, "Opération annulée par l'utilisateur.")
+                return
+            
+            if success:
+                self.progress_updated.emit(100, "Modèles recréés avec succès !")
+                self.finished.emit(True, "La récréation des modèles a été réalisée avec succès.")
+            else:
+                self.finished.emit(False, "La récréation des modèles a échoué.")
+                
+        except Exception as exc:
+            console.print(f"[red]Erreur lors de la récréation des modèles : {exc}")
+            self.finished.emit(False, f"Erreur lors de la récréation des modèles : {str(exc)}")
+
+    def _on_progress(self, pourcentage, message):
+        """Callback de progression appelé par GestionML."""
+        if self._is_cancelled:
+            raise InterruptedError("Opération annulée par l'utilisateur")
+        self.progress_updated.emit(int(pourcentage), message)
+
+    def cancel(self):
+        """Demande l'annulation de l'opération en cours."""
+        self._is_cancelled = True
+        if self.gestion_ml and hasattr(self.gestion_ml, 'cancel'):
+            self.gestion_ml.cancel()
+
 class ExportBdPtWorker(QThread):
     """Exporte la base de produits traités (CSV par lots ou Excel) hors du thread UI."""
 
@@ -98,33 +155,82 @@ class ParametresNavigation(QObject):
               self.on_telecharger_bd_entrainement
         )
 
-    def on_recreer_modeles (self):
+    def on_recreer_modeles(self):
+        """Gère la récréation des modèles avec progression dans un thread séparé."""
         answer = QMessageBox.question(
             self.page,
             "Récréation des modèles de prediction",
-            "Êtes-vous sûr(e) de vouloir procéder à la récréation des modèles de prediction ?\nCette opération peut durer plusieurs minutes.",
+            "Êtes-vous sûr(e) de vouloir procéder à la récréation des modèles de prediction ?\n"
+            "Cette opération peut durer plusieurs minutes.",
             QMessageBox.Yes | QMessageBox.No,
         )
         if answer != QMessageBox.Yes:
             return
 
-        try:  
-            gestion_ml = GestionML(data_service=self.data_service)  
-            gestion_ml.recreer_modeles()  
-  
-            QMessageBox.information(  
-                self.page,  
-                "Recreation des modèles",  
-                "La récréation des modèles a été réalisée avec succès."  
-            )  
-  
-        except Exception as e :  
-            console.print(f"[yellow]Avertissement: impossible de récreer les modeles de ML: {e}")  
-            QMessageBox.critical (  
-                self.page,  
-                "Erreur",  
-                f"Erreur lors de la récréation des modèles: {str(e)}"  
+        # Création de la barre de progression
+        self._modeles_progress = QProgressDialog(
+            "Récréation des modèles en cours...", 
+            "Annuler", 
+            0, 
+            100, 
+            self.page
+        )
+        self._modeles_progress.setWindowTitle("Récréation des modèles")
+        self._modeles_progress.setWindowModality(Qt.WindowModal)
+        self._modeles_progress.setMinimumDuration(0)
+        self._modeles_progress.setValue(0)
+        self._modeles_progress.show()
+
+        # Création et démarrage du worker
+        self._modeles_worker = TraitementModelesWorker(self.data_service)
+        self._modeles_worker.progress_updated.connect(self._on_modeles_progress)
+        self._modeles_worker.finished.connect(self._on_modeles_fini)
+        
+        # Connexion du bouton Annuler
+        self._modeles_progress.canceled.connect(self._on_modeles_annule)
+        
+        self._modeles_worker.start()
+
+    @Slot(int, str)
+    def _on_modeles_progress(self, pourcentage, message):
+        """Met à jour la barre de progression des modèles."""
+        if getattr(self, '_modeles_progress', None) is None:
+            return
+        self._modeles_progress.setValue(pourcentage)
+        if message:
+            self._modeles_progress.setLabelText(f"{message}\n{pourcentage}%")
+
+    @Slot(bool, str)
+    def _on_modeles_fini(self, success, message):
+        """Gère la fin de la récréation des modèles."""
+        if getattr(self, '_modeles_progress', None) is not None:
+            self._modeles_progress.close()
+            self._modeles_progress = None
+
+        if success:
+            QMessageBox.information(
+                self.page,
+                "Récréation des modèles",
+                message
             )
+        else:
+            QMessageBox.critical(
+                self.page,
+                "Erreur",
+                message
+            )
+
+        # Nettoyage du worker
+        if getattr(self, '_modeles_worker', None) is not None:
+            self._modeles_worker.deleteLater()
+            self._modeles_worker = None
+
+    @Slot()
+    def _on_modeles_annule(self):
+        """Gère l'annulation de la récréation des modèles."""
+        if getattr(self, '_modeles_worker', None) is not None:
+            self._modeles_worker.cancel()
+            self._modeles_progress.setLabelText("Annulation en cours...")
             
     def on_recreer_bd_entrainement (self):
             answer = QMessageBox.question(

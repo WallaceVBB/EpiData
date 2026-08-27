@@ -16,7 +16,7 @@ from services import DataService
 from utils import BD_PT, console
 
 # Rôle personnalisé utilisé pour retenir la dernière valeur "connue" d'une cellule,
-# afin de pouvoir détecter une modification réelle (TODO résolu : voir setData).
+# afin de pouvoir détecter une modification réelle.
 ROLE_VALEUR_PRECEDENTE = Qt.ItemDataRole.UserRole + 2
 
 # Nom des widgets de filtre définis dans le .ui de la page traitement_resultats
@@ -124,14 +124,7 @@ class TableModelEditablePersonnalise(QStandardItemModel):
         return super().data(index, role)
 
     def setData(self, index, value, role=Qt.ItemDataRole.EditRole):
-        """
-        Gère la modification des données.
-
-        TODO résolu : une ligne n'est signalée comme modifiée (item_changed) que si
-        la valeur a réellement changé par rapport à la dernière valeur connue. Cela
-        évite par exemple qu'ouvrir puis refermer l'éditeur d'une cellule (sans rien
-        changer) ne marque le produit comme "corrigé".
-        """
+        """Gère la modification des données."""
         if not index.isValid():
             return False
 
@@ -184,11 +177,8 @@ class TableModelEditablePersonnalise(QStandardItemModel):
 
 
 class FiltreProduitsProxyModel(QSortFilterProxyModel):
-    """
-    Proxy model permettant de filtrer le tableau de résultats, soit sur une colonne
-    précise, soit sur toutes les colonnes à la fois (recherche globale).
-    Répond au TODO : ajouter des filtres pour faciliter la révision.
-    """
+    """Proxy model permettant de filtrer le tableau de résultats, soit sur une colonne
+    précise, soit sur toutes les colonnes à la fois (recherche globale)."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -330,13 +320,9 @@ class TraitementNavigation:
                 results_page.b_Page_Suivante.clicked.connect(self.on_page_suivante)
 
     def _configurer_redimensionnement(self):
-        """
-        TODO (partiellement résolu) : la fenêtre ne s'ajuste pas correctement quand on
-        la redimensionne/maximise. Le réglage principal doit être terminé dans Qt
-        Designer/Creator (layouts + politiques de taille "Expanding" sur les widgets
-        parents concernés). Ce qui suit prépare la partie applicable depuis le code :
-        politiques de taille sur la page et le tableau, et étirement des colonnes.
-        """
+        # Colonnes redimensionnables à la souris (Interactive) + dernière colonne qui
+        # absorbe l'espace restant quand la fenêtre est redimensionnée (stretchLastSection).
+        # Combo suffisant : pas besoin d'un redimensionnement proportionnel personnalisé.
         results_page = self.pages.get('traitement_resultats')
         if not results_page:
             return
@@ -588,7 +574,8 @@ class TraitementNavigation:
             delegate = ComboBoxDelegate(self._categories_list, table_view)
             table_view.setItemDelegateForColumn(base_variante_col_index, delegate)
 
-        table_view.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        table_view.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        table_view.resizeColumnsToContents()
         table_view.verticalHeader().setVisible(False)
         table_view.setAlternatingRowColors(True)
         table_view.setSortingEnabled(True)
