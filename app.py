@@ -73,6 +73,8 @@ class Application:
         # Afficher la page d'accueil au démarrage
         self.show_page("accueil")
 
+        self._verifier_maj_au_demarrage()
+
     def load_gui(self, filename):
         # Création du chargeur Qt
         loader = QUiLoader()

@@ -7,6 +7,7 @@ import subprocess
 import requests  
 from packaging import version
 from PySide6.QtCore import QObject, Signal
+from PySide6.QtWidgets import QApplication
   
 from utils import VERSION, USER_APP_DIR, console  
   
@@ -92,22 +93,50 @@ class MajGestion ():
         return destination  
     
     @staticmethod
-    def appliquer_maj(chemin_installeur):  
-        """Lance l'installeur/AppImage puis ferme l'application."""  
-        systeme = platform.system()  
-        if systeme == "Windows":  
-            # installeur Inno Setup en mode silencieux  
-            subprocess.Popen([chemin_installeur, "/VERYSILENT"], close_fds=True)  
-        else:  # Linux : remplacer l'AppImage en cours d'exécution  
-            appimage_courant = os.environ.get("APPIMAGE")  
-            os.chmod(chemin_installeur, 0o755)  
-            if appimage_courant:  
-                # petit script externe qui attend, remplace, relance  
-                MajGestion._lancer_updater_linux(chemin_installeur, appimage_courant)  
-            else:  
-                subprocess.Popen([chemin_installeur], close_fds=True)  
-        # ferme l'app pour libérer le binaire  
-        sys.exit(0)
+    def appliquer_maj(chemin_installeur):
+        """Lance l'installeur/AppImage puis ferme proprement l'application."""
+        systeme = platform.system()
+
+        if systeme == "Windows":
+            MajGestion._lancer_updater_windows(chemin_installeur)
+        else:  # Linux : remplacer l'AppImage en cours d'exécution
+            appimage_courant = os.environ.get("APPIMAGE")
+            os.chmod(chemin_installeur, 0o755)
+            if appimage_courant:
+                MajGestion._lancer_updater_linux(chemin_installeur, appimage_courant)
+            else:
+                subprocess.Popen([chemin_installeur], close_fds=True)
+
+        app = QApplication.instance()
+        if app is not None:
+            app.quit()
+        else:
+            sys.exit(0)
+
+    @staticmethod
+    def _lancer_updater_windows(chemin_installeur):
+        """Écrit un script .bat qui attend que l'appli soit bien fermée (verrou
+        libéré sur l'exe) avant de lancer l'installeur."""
+        script = os.path.join(USER_APP_DIR, "updater.bat")
+        
+        # Chemin du fichier log
+        log_file = os.path.join(USER_APP_DIR, "installer_log.txt")
+        
+        contenu = f'''@echo off
+timeout /t 2 /nobreak >nul
+start "" "{chemin_installeur}" /SILENT /LOG="{log_file}"
+'''
+        with open(script, "w") as f:
+            f.write(contenu)
+
+        subprocess.Popen(
+            ["cmd", "/c", script],
+            close_fds=True,
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
+        )
+        
+        # Pour debug : affiche où le log sera écrit
+        console.log(f"Installeur lancé. Log attendu à : {log_file}")
 
     @staticmethod
     def _lancer_updater_linux(nouveau, ancien):  

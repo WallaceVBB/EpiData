@@ -345,7 +345,12 @@ class ParametresNavigation(QObject):
         # progression -> barre de chargement  
         self._worker.termine_download.connect(self._on_download_fini)  
 
-        self._thread.start()  
+        self._thread.start()
+
+        self._worker.aucune_maj.connect(self._thread.quit)  
+        self._worker.erreur.connect(self._thread.quit)  
+        self._worker.termine_download.connect(self._thread.quit)  
+        self._thread.finished.connect(self._thread.deleteLater)  
 
     def on_telecharger_bd_pt (self):
                 bd_pt=self.data_service.bd_pt
@@ -464,7 +469,10 @@ class ParametresNavigation(QObject):
 
     @Slot(str)  
     def _on_download_fini(self, chemin):  
-        self._progress.close()  
-        import maj_logiciel  
-        maj_logiciel.MajGestion.appliquer_maj(chemin)  
+        self._progress.close()
+        try:
+            import maj_logiciel  
+            maj_logiciel.MajGestion.appliquer_maj(chemin)
+        except Exception as e:
+            QMessageBox.critical(self.page, "Erreur", f"Impossible de lancer la mise à jour : {e}")
     
