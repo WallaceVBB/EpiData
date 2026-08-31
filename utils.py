@@ -15,7 +15,7 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 # Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
 NOM_APPLICATION = "EpiData"
-VERSION = "0.1.0"
+VERSION = "0.1.1"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 
 def _est_empaquete():
