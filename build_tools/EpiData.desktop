@@ -1,7 +1,7 @@
-[Desktop Entry]  
-Type=Application  
-Name=EpiData  
-Exec=EpiData  
-Icon=epidata_logo  
-Categories=Utility;  
+[Desktop Entry]
+Type=Application
+Name=EpiData
+Exec=EpiData
+Icon=epidata_logo
+Categories=Utility;
 Terminal=false
