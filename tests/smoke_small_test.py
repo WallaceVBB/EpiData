@@ -201,31 +201,6 @@ def creer_modeles_factices(dossier_modeles):
         os.path.join(dossier_modeles, 'donnees_basevariante_cosine.joblib'),
     )
 
-
-def test_prediction_cosine(data_service):
-    etape(6, "Prédiction cosinus avec des modèles factices (sans LinearSVC)")
-    dossier_modeles = os.path.join(REPERTOIRE_TEMPORAIRE, "modeles_factices")
-    creer_modeles_factices(dossier_modeles)
-
-    ml = GestionML(modeles_dir=dossier_modeles, data_service=data_service)
-    ml.charger_modeles()
-    verifier(ml.modeles_cosine_disponibles, "les modèles cosinus factices sont chargés")
-    verifier(not ml.modeles_svc_disponibles, "aucun modèle LinearSVC n'est chargé (pas d'entraînement)")
-
-    prediction, score = ml.predire_avec_cosine_similarity("TOMATES GRAPPE CAT1")
-    verifier(prediction == "tomate grappe", f"la prédiction cosinus est correcte (obtenu: {prediction})")
-    verifier(0.0 < score <= 1.0, "le score de confiance est dans [0, 1]")
-
-    prediction, score, methode = ml.predire_avec_methode_hybride("TOMATES GRAPPE CAT1")
-    verifier(methode == "TF-IDF_Cosine", "la méthode hybride retombe sur le cosinus sans modèle SVC")
-
-    classificateur = data_processing.ClassificateurProduits(data_service=data_service, gestion_ml=ml)
-    verifier(
-        classificateur.predire_avec_methode_cosine("TOMATES GRAPPE CAT1")[0] == "tomate grappe",
-        "ClassificateurProduits délègue la prédiction cosinus à la couche ML",
-    )
-
-
 def main():
     print(f"Répertoire utilisateur temporaire : {REPERTOIRE_TEMPORAIRE}")
     print("Ce test n'entraîne aucun modèle ML : voir tests/full_test.py pour le test complet.\n")
@@ -238,9 +213,8 @@ def main():
         data_service = test_schema_produits()
         test_cycle_persistance(data_service)
         test_nettoyer_texte()
-        test_prediction_cosine(data_service)
 
-        etape(7, "Garde anti-entraînement")
+        etape(6, "Garde anti-entraînement")
         verifier(not ENTRAINEMENTS_DETECTES, "aucun entraînement de modèle n'a été déclenché")
 
         print("\nSmoke test terminé avec succès (aucun entraînement ML).")

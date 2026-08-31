@@ -25,32 +25,33 @@ class TraitementModelesWorker(QThread):
         """Exécute la récréation des modèles dans un thread séparé."""
         try:
             self.progress_updated.emit(0, "Initialisation de la récréation des modèles...")
-            
-            # Création de l'instance GestionML dans le thread
-            self.gestion_ml = GestionML(data_service=self.data_service)
-            
-            # Vérification de l'annulation
+
+            data_service_thread = DataService(
+                bd_pt=self.data_service.bd_pt,
+                bd_entrainement=self.data_service.bd_entrainement,
+            )
+            self.gestion_ml = GestionML(data_service=data_service_thread)
+
             if self._is_cancelled:
                 self.finished.emit(False, "Opération annulée par l'utilisateur.")
                 return
-            
+
             self.progress_updated.emit(10, "Préparation des données...")
-            
-            # Appel de la méthode de récréation avec callback de progression
+
             success = self.gestion_ml.recreer_modeles(
                 progress_callback=self._on_progress
             )
-            
+
             if self._is_cancelled:
                 self.finished.emit(False, "Opération annulée par l'utilisateur.")
                 return
-            
+
             if success:
                 self.progress_updated.emit(100, "Modèles recréés avec succès !")
                 self.finished.emit(True, "La récréation des modèles a été réalisée avec succès.")
             else:
                 self.finished.emit(False, "La récréation des modèles a échoué.")
-                
+
         except Exception as exc:
             console.print(f"[red]Erreur lors de la récréation des modèles : {exc}")
             self.finished.emit(False, f"Erreur lors de la récréation des modèles : {str(exc)}")
@@ -194,11 +195,16 @@ class ParametresNavigation(QObject):
     @Slot(int, str)
     def _on_modeles_progress(self, pourcentage, message):
         """Met à jour la barre de progression des modèles."""
-        if getattr(self, '_modeles_progress', None) is None:
+        dlg = self._modeles_progress
+        if dlg is None:
             return
-        self._modeles_progress.setValue(pourcentage)
-        if message:
-            self._modeles_progress.setLabelText(f"{message}\n{pourcentage}%")
+        try:
+            dlg.setValue(pourcentage)
+            if message:
+                dlg.setLabelText(f"{message}\n{pourcentage}%")
+        except RuntimeError:
+            # L'objet Qt sous-jacent a été détruit entre-temps (réentrance)
+            pass
 
     @Slot(bool, str)
     def _on_modeles_fini(self, success, message):
@@ -393,11 +399,15 @@ class ParametresNavigation(QObject):
 
     @Slot(int, str)
     def _on_export_bd_pt_progress(self, pourcentage, message):
-        if getattr(self, '_export_progress', None) is None:
+        dlg = self._export_progress
+        if dlg is None:
             return
-        self._export_progress.setValue(pourcentage)
-        if message:
-            self._export_progress.setLabelText(message)
+        try:
+            dlg.setValue(pourcentage)
+            if message:
+                dlg.setLabelText(message)
+        except RuntimeError:
+            pass
 
     @Slot(bool, str)
     def _on_export_bd_pt_fini(self, success, message):

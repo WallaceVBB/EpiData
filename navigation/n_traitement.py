@@ -518,7 +518,8 @@ class TraitementNavigation:
         table_view = results_page.Tableau_Results
 
         # Colonnes à cacher (non affichables à l'utilisateur)
-        colonnes_cachees = {'id', 'a_reviser', 'idx_code_produit', 'idx_texte_brut', 'texte_propre','fournisseur','siret', 'tva', 'methode_prediction','allergenes'}
+        colonnes_cachees = {'id', 'a_reviser', 'idx_code_produit', 'idx_texte_brut', 'texte_propre','fournisseur','siret',
+                            'tva', 'methode_prediction','allergenes', 'aliment', 'variante'}
 
         if df is None or df.empty:
             model = QStandardItemModel()
