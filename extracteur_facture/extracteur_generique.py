@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+
 from dataclasses import dataclass
 from pathlib import Path
 from statistics import median
@@ -9,9 +10,65 @@ from typing import Optional
 import pandas as pd
 import pdfplumber
 
+from utils import TESSERACT_EXE, TESSDATA_DIR
+
+
+try:
+    import pytesseract
+
+    _OCR_AVAILABLE = True
+    _OCR_IMPORT_ERROR = None
+
+except ImportError as _e:
+    _OCR_AVAILABLE = False
+    _OCR_IMPORT_ERROR = _e
+
+
+# --- Paramètres OCR ---------------------------------------------------------
+
+OCR_DPI = 300
+OCR_LANG = "fra+eng"
+OCR_MIN_WORDS_FOR_TEXT_LAYER = 5
+OCR_MIN_CONFIDENCE = 40
+
+OCR_TESSDATA_CONFIG = f'--tessdata-dir {TESSDATA_DIR}'
+
+
+def configurer_tesseract() -> bool:
+    """Configure Tesseract fourni avec EpiData."""
+
+    if not _OCR_AVAILABLE:
+        return False
+
+    tesseract_exe = Path(TESSERACT_EXE)
+    tessdata_dir = Path(TESSDATA_DIR)
+
+    if not tesseract_exe.is_file():
+        print(f"[OCR] tesseract.exe introuvable : {tesseract_exe}")
+        return False
+
+    if not tessdata_dir.is_dir():
+        print(f"[OCR] dossier tessdata introuvable : {tessdata_dir}")
+        return False
+
+    try:
+        pytesseract.pytesseract.tesseract_cmd = str(tesseract_exe)
+
+        return True
+
+    except Exception as e:
+        print(
+            f"[OCR] Tesseract inutilisable : "
+            f"{type(e).__name__}: {e}"
+        )
+        return False
+
+
+_OCR_CONFIGURED = configurer_tesseract()
+
 STANDARD_COLUMNS = [
     "Date Facture", "Désignation", "Quantité", "Unité",
-    "Prix unitaire HT", "Montant net HT", "Taux TVA",
+    "Prix unitaire HT", "Montant net HT", "Taux TVA", "Source extraction",
 ]
 
 # Termes génériques qui signalent des zones hors lignes produits.
@@ -20,6 +77,7 @@ SUMMARY_TERMS = (
     "net à payer", "net a payer", "montant tva", "total tva", "taux total",
     "sous-total", "sous total", "solde à payer", "solde a payer",
     "reste à payer", "reste a payer", "taxes :", "taxes:", "total transport",
+    "répartition produit", "repartition produit", "détail de la tva", "detail de la tva",
 )
 NON_PRODUCT_TERMS = (
     "coordonnées bancaires", "coordonnees bancaires", "iban", "bic", "siret", "siren",
@@ -53,7 +111,6 @@ _NUM_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d
 _PERCENT_RE = re.compile(r"^[+-]?\d+(?:[\.,]\d+)?\s*%$")
 _PRICE_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d+)?)[ ]*€?$", re.I)
 
-
 def normalize_text(value: str) -> str:
     s = str(value or "")
     s = s.replace("￾", " ").replace("\u00ad", "")
@@ -84,20 +141,58 @@ def is_percent(value: str) -> bool:
     return bool(_PERCENT_RE.fullmatch(normalize_text(value)))
 
 
+def is_plausible_price(w: "Word") -> bool:
+    """Comme `is_price`, mais plus strict pour les mots issus de l'OCR.
+
+    Sur des scans bruités, une ligne de tableau ou une tache peut être lue
+    par erreur comme un chiffre isolé ("2"), ce qui pollue la sélection du
+    prix unitaire / montant. Un vrai montant OCR a soit un séparateur
+    décimal, soit un symbole "€" collé, soit au moins 2 chiffres — un
+    chiffre unique et isolé n'est jamais un montant plausible dans ce
+    contexte (Prix unitaire HT / Montant net HT sont toujours à 2 décimales).
+    """
+    if not is_price(w.text):
+        return False
+    if not getattr(w, "is_ocr", False):
+        return True
+    digits = re.sub(r"[^0-9]", "", w.text)
+    return len(digits) >= 2 or bool(re.search(r"[.,]", w.text))
+
+
 def is_unit_word(value: str) -> bool:
     return token_key(value) in {token_key(x) for x in UNIT_WORDS}
 
 
-def is_summary(text: str) -> bool:
+_TERM_BOUNDARY_CACHE: dict[str, re.Pattern] = {}
+
+
+def _contains_any_term(text: str, terms: tuple[str, ...]) -> bool:
+    """Comme `term in normalize_key(text)`, mais avec des frontières de mots :
+    évite les faux positifs tels que "bic" (code bancaire) qui matcherait par
+    erreur à l'intérieur de "bicolore".
+    """
     k = normalize_key(text)
-    return any(t in k for t in SUMMARY_TERMS)
+    if not k:
+        return False
+    for term in terms:
+        pattern = _TERM_BOUNDARY_CACHE.get(term)
+        if pattern is None:
+            pattern = re.compile(r"(?<![a-z0-9])" + re.escape(term) + r"(?![a-z0-9])")
+            _TERM_BOUNDARY_CACHE[term] = pattern
+        if pattern.search(k):
+            return True
+    return False
+
+
+def is_summary(text: str) -> bool:
+    return _contains_any_term(text, SUMMARY_TERMS)
 
 
 def is_non_product(text: str) -> bool:
     k = normalize_key(text)
     if not k:
         return True
-    return any(t in k for t in NON_PRODUCT_TERMS)
+    return _contains_any_term(text, NON_PRODUCT_TERMS)
 
 
 def looks_like_comment(text: str) -> bool:
@@ -115,6 +210,7 @@ class Word:
     x1: float
     top: float
     bottom: float
+    is_ocr: bool = False
 
     @property
     def xmid(self) -> float:
@@ -147,7 +243,104 @@ class ColumnModel:
     amount_x: Optional[float]
 
 
-def extract_words(page) -> list[Word]:
+def render_page_image(page, dpi: int = OCR_DPI):
+    """Rasterise une page pdfplumber en image PIL, avec mise en cache sur la
+    page elle-même pour éviter de rasteriser deux fois (une fois pour les
+    mots, une fois pour le texte brut de secours utilisé par invoice_date).
+
+    L'image est prétraitée (niveaux de gris, sur-échantillonnage, contraste,
+    netteté) car les factures scannées reçues par les fournisseurs sont
+    souvent numérisées à basse résolution (~150 dpi) : un sur-échantillonnage
+    brut ne crée pas d'information, mais combiné à l'ajustement de contraste
+    et à la netteté, il aide sensiblement Tesseract à séparer les caractères
+    collés et à mieux repérer les virgules décimales.
+    """
+    cache = getattr(page, "_ocr_image_cache", None)
+    if cache is not None and cache.get("dpi") == dpi:
+        return cache["image"]
+    image = page.to_image(resolution=dpi).original
+    try:
+        from PIL import Image as PILImage, ImageOps, ImageFilter
+        gray = image.convert("L")
+        w, h = gray.size
+        gray = gray.resize((w * 2, h * 2), PILImage.LANCZOS)
+        gray = ImageOps.autocontrast(gray)
+        gray = gray.filter(ImageFilter.SHARPEN)
+        image = gray
+    except Exception:
+        pass
+    page._ocr_image_cache = {"dpi": dpi, "image": image}
+    return image
+
+
+def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> list[Word]:
+    scale = 72.0 / (dpi * 2)
+    # --psm 4 : "une colonne de texte de tailles variables" — le mode le
+    # plus robuste ici pour des lignes de tableau, en évitant que Tesseract
+    # ne fusionne les deux blocs d'en-tête (gauche/droite) du haut de page.
+    config = f'--psm 4 {OCR_TESSDATA_CONFIG}'
+    try:
+        data = pytesseract.image_to_data(image, lang=lang, config=config, output_type=pytesseract.Output.DICT)
+    except Exception as e:
+        print(f"[OCR] Erreur image_to_data : "
+              f"{type(e).__name__}: {e}")
+        return []
+
+    n = len(data.get("text", []))
+    raw_words = []
+    for i in range(n):
+        text = normalize_text(data["text"][i])
+        if not text or text == "_":
+            continue
+        try:
+            conf = float(data["conf"][i])
+        except (TypeError, ValueError):
+            conf = -1.0
+        if conf < OCR_MIN_CONFIDENCE:
+            continue
+        raw_words.append({
+            "text": text,
+            "left": float(data["left"][i]),
+            "top": float(data["top"][i]),
+            "width": float(data["width"][i]),
+            "height": float(data["height"][i]),
+            "line_key": (data["block_num"][i], data["par_num"][i], data["line_num"][i]),
+        })
+
+    if not raw_words:
+        return []
+
+    # Moyenne du "top" par ligne Tesseract, pour aligner tous les mots d'une
+    # même ligne malgré le bruit pixel par pixel.
+    line_tops: dict[tuple, list[float]] = {}
+    for w in raw_words:
+        line_tops.setdefault(w["line_key"], []).append(w["top"])
+    line_avg_top = {k: sum(v) / len(v) for k, v in line_tops.items()}
+
+    out: list[Word] = []
+    for w in raw_words:
+        top = line_avg_top[w["line_key"]]
+        out.append(Word(
+            w["text"],
+            w["left"] * scale,
+            (w["left"] + w["width"]) * scale,
+            top * scale,
+            (top + w["height"]) * scale,
+            is_ocr=True,
+        ))
+    return out
+
+
+def ocr_text_from_image(image, lang: str = OCR_LANG) -> str:
+    try:
+        return pytesseract.image_to_string(image, lang=lang, config="--psm 4") or ""
+    except Exception as e:
+        print(f"[OCR] Erreur image_to_string : "
+              f"{type(e).__name__}: {e}")
+    return ""
+
+
+def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> list[Word]:
     try:
         raw = page.extract_words(
             x_tolerance=1.2, y_tolerance=2.5,
@@ -161,7 +354,47 @@ def extract_words(page) -> list[Word]:
         if not text or text == "_":
             continue
         out.append(Word(text, float(item["x0"]), float(item["x1"]), float(item["top"]), float(item["bottom"])))
+
+    if len(out) >= OCR_MIN_WORDS_FOR_TEXT_LAYER:
+        return out
+
+    # Page probablement scannée (image, pas de couche de texte exploitable) :
+    # on bascule sur l'OCR. Si l'OCR échoue ou n'est pas disponible, on
+    # retombe sur ce que le texte natif a pu donner (souvent rien).
+    if _OCR_AVAILABLE and _OCR_CONFIGURED:
+        try:
+            image = render_page_image(page, ocr_dpi)
+            ocr_out = ocr_words_from_image(image, ocr_dpi, ocr_lang)
+            if len(ocr_out) > len(out):
+                page._used_ocr = True
+                return ocr_out
+        except Exception:
+            pass
     return out
+
+
+def page_text(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> str:
+    """Texte complet d'une page : couche native si elle est exploitable,
+    sinon texte obtenu par OCR. Utilisé pour la recherche de la date de
+    facture (invoice_date) et le fallback de secours (extract_fallback_page).
+    """
+    try:
+        text = page.extract_text(x_tolerance=1.5, y_tolerance=2.5) or ""
+    except Exception:
+        text = ""
+    if len(re.sub(r"\s", "", text)) >= 20:
+        return text
+
+    if _OCR_AVAILABLE and _OCR_CONFIGURED:
+        try:
+            image = render_page_image(page, ocr_dpi)
+            ocr_text = ocr_text_from_image(image, ocr_lang)
+            if len(re.sub(r"\s", "", ocr_text)) > len(re.sub(r"\s", "", text)):
+                page._used_ocr = True
+                return ocr_text
+        except Exception:
+            pass
+    return text
 
 
 def group_lines(words: list[Word], tolerance: float = 3.2) -> list[Line]:
@@ -475,7 +708,7 @@ def parse_product_line(line: Line, model: ColumnModel) -> Optional[dict[str, str
         return None
 
     # Les prix sont les valeurs explicitement placées dans les colonnes de prix.
-    prices = [w for w in ws if is_price(w.text) and w.xmid > quantity.x1 - 3]
+    prices = [w for w in ws if is_plausible_price(w) and w.xmid > quantity.x1 - 3]
     if len(prices) < 2:
         return None
 
@@ -580,6 +813,7 @@ def continuation_of_row(row: dict[str, str], line: Line, model: ColumnModel) -> 
 
 def extract_page(page, date: str) -> list[dict[str, str]]:
     words = extract_words(page)
+    source = "OCR (à vérifier)" if getattr(page, "_used_ocr", False) else "Texte natif"
     lines = group_lines(words)
     header = find_header(lines, page.width)
     if header is None:
@@ -596,6 +830,7 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
         if is_summary(text):
             if current is not None and current.get("__score", 0) >= 0.70:
                 current["Date Facture"] = date
+                current["Source extraction"] = source
                 current.pop("__score", None)
                 rows.append(current)
                 current = None
@@ -611,6 +846,7 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
         if parsed:
             if current is not None and current.get("__score", 0) >= 0.70:
                 current["Date Facture"] = date
+                current["Source extraction"] = source
                 current.pop("__score", None)
                 rows.append(current)
             current = parsed
@@ -620,6 +856,7 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
 
     if current is not None and current.get("__score", 0) >= 0.70:
         current["Date Facture"] = date
+        current["Source extraction"] = source
         current.pop("__score", None)
         rows.append(current)
     return rows
@@ -628,7 +865,8 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
 def extract_fallback_page(page, date: str) -> list[dict[str, str]]:
     """Fallback texte : conservateur et uniquement utilisé si aucun header exploitable."""
     out = []
-    text = page.extract_text(x_tolerance=1.5, y_tolerance=2.5) or ""
+    text = page_text(page)
+    source = "OCR (à vérifier)" if getattr(page, "_used_ocr", False) else "Texte natif"
     for raw in text.splitlines():
         s = normalize_text(raw)
         if not s or is_summary(s) or is_non_product(s):
@@ -648,6 +886,7 @@ def extract_fallback_page(page, date: str) -> list[dict[str, str]]:
             "Prix unitaire HT": normalize_text(pu),
             "Montant net HT": normalize_text(amount),
             "Taux TVA": vat.replace(" ", ""),
+            "Source extraction": source,
         })
     return out
 
@@ -658,11 +897,21 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
     if not pdf_path.exists() or not pdf_path.is_file():
         raise FileNotFoundError(f"Fichier PDF introuvable : {pdf_path}")
 
+    if not _OCR_AVAILABLE:
+        print(
+            "Avertissement : pytesseract n'est pas installé. Les pages sans "
+            "texte natif (factures scannées) seront ignorées. Pour activer "
+            "l'OCR : pip install pytesseract pypdfium2 --break-system-packages "
+            "et apt-get install -y tesseract-ocr tesseract-ocr-fra"
+        )
+
     all_rows: list[dict[str, str]] = []
     last_date = ""
     with pdfplumber.open(pdf_path) as pdf:
         pages = list(pdf.pages)
-        page_texts = [pg.extract_text() or "" for pg in pages]
+        # page_text() bascule automatiquement sur l'OCR pour les pages sans
+        # couche de texte exploitable (voir la docstring du module).
+        page_texts = [page_text(pg) for pg in pages]
 
         for page_num, page in enumerate(pages, start=1):
             text = page_texts[page_num - 1]

@@ -60,6 +60,8 @@ NAVIGATION_DIR = os.path.join(USER_APP_DIR, "navigation") # sous-dossier pour le
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des produits traités
+TESSERACT_EXE = os.path.join("tesseract", "tesseract.exe")
+TESSDATA_DIR = os.path.join("tesseract", "tessdata")
 
 # Fichiers de ressources copiés vers le dossier utilisateur au premier lancement
 FICHIERS_RESSOURCES = [

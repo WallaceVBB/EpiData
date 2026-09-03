@@ -7,6 +7,7 @@ hidden = []
 datas = [  
     ('gui', 'gui'),  
     ('parametres', 'parametres'),
+    ("tesseract", "tesseract"),
 ]  
   
 # scikit-learn + scipy (dépendance) : sous-modules chargés dynamiquement  
