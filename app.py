@@ -3,17 +3,9 @@
 ### Bibliothèques
 import sys
 import os
-from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtCore import QThread
 from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import (
-    QApplication,
-    QLabel,
-    QMainWindow,
-    QSplashScreen,
-    QVBoxLayout,
-    QWidget,
-    QMessageBox,
-)
+from PySide6.QtWidgets import (QApplication,QMessageBox)
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_extracteur_factures import FactureNavigation
 from navigation.n_parametres import ParametresNavigation

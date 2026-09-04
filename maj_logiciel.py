@@ -14,32 +14,53 @@ from utils import VERSION, USER_APP_DIR, console
 REPO = "WallaceVBB/EpiData"  
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"  
 
-class MajWorker(QObject):  
-    progression = Signal(int)          # % de téléchargement  
-    maj_disponible = Signal(dict)      # infos de la release  
-    aucune_maj = Signal()  
-    termine_download = Signal(str)     # chemin de l'installeur  
-    erreur = Signal(str)  
-  
-    def verifier(self):  
-        try:  
-            info = MajGestion.verifier_maj()  
-            if info:  
-                self.maj_disponible.emit(info)  
-            else:  
-                self.aucune_maj.emit()  
-        except Exception as e:  
-            self.erreur.emit(str(e))  
-  
-    def telecharger(self, info):  
-        try:  
-            chemin = MajGestion.telecharger_asset(  
-                info["url"], info["nom_fichier"],  
-                callback_progression=self.progression.emit  
-            )  
-            self.termine_download.emit(chemin)  
-        except Exception as e:  
+class MajWorker(QObject):
+    progression = Signal(int)          # % de téléchargement
+    maj_disponible = Signal(dict)      # infos de la release
+    aucune_maj = Signal()
+    termine_download = Signal(str)     # chemin de l'installeur
+    erreur = Signal(str)
+    annule = Signal()                  # téléchargement annulé par l'utilisateur
+
+    def __init__(self):
+        super().__init__()
+        self._is_cancelled = False
+
+    def verifier(self):
+        try:
+            info = MajGestion.verifier_maj()
+            if info:
+                self.maj_disponible.emit(info)
+            else:
+                self.aucune_maj.emit()
+        except Exception as e:
             self.erreur.emit(str(e))
+
+    def telecharger(self, info):
+        self._is_cancelled = False
+        chemin_partiel = None
+        try:
+            chemin_partiel = os.path.join(USER_APP_DIR, info["nom_fichier"])
+            chemin = MajGestion.telecharger_asset(
+                info["url"], info["nom_fichier"],
+                callback_progression=self.progression.emit,
+                cancel_check=lambda: self._is_cancelled
+            )
+            self.termine_download.emit(chemin)
+        except InterruptedError:
+            # Nettoyage du fichier partiellement téléchargé
+            if chemin_partiel and os.path.exists(chemin_partiel):
+                try:
+                    os.remove(chemin_partiel)
+                except OSError:
+                    pass
+            self.annule.emit()
+        except Exception as e:
+            self.erreur.emit(str(e))
+
+    def demander_annulation(self):
+        """Thread-safe : simple flag lu par le thread worker entre deux chunks."""
+        self._is_cancelled = True
 
 class MajGestion ():
     @staticmethod

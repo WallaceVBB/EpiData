@@ -499,5 +499,3 @@ class DataService:
                 return False  
             df_entrainement.to_excel(chemin, index=False)  
             return True
-
-    

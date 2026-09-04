@@ -317,40 +317,43 @@ class ParametresNavigation(QObject):
             "Cette fonction n'est pas encore mise en place."
         )
 
-    def on_maj_logiciel(self):  
-        if not _est_empaquete():  
-            QMessageBox.information(  
-                self.page, "Mise à jour",  
-                "La mise à jour n'est disponible que dans la version installée du logiciel."  
-            )  
+    def on_maj_logiciel(self):
+        if not _est_empaquete():
+            QMessageBox.information(
+                self.page, "Mise à jour",
+                "La mise à jour n'est disponible que dans la version installée du logiciel."
+            )
             return
 
-        self._thread = QThread()  
-        self._worker = MajWorker()  
-        self._worker.moveToThread(self._thread)  
-        self._thread.started.connect(self._worker.verifier)  
-  
-        self._worker.aucune_maj.connect(  
-            lambda: QMessageBox.information(self.page, "Mise à jour",  
-                                            "EpiData est déjà à jour.")  
-        )  
-        self._worker.maj_disponible.connect(self._demander_telechargement)  
-        self._worker.erreur.connect(  
-            lambda msg: QMessageBox.warning(self.page, "Mise à jour",  
-                                            f"Vérification impossible : {msg}")  
-        )  
+        self._thread = QThread()
+        self._worker = MajWorker()
+        self._worker.moveToThread(self._thread)
+        self._thread.started.connect(self._worker.verifier)
 
-        self.demande_telechargement.connect(self._worker.telecharger) 
+        self._worker.aucune_maj.connect(self._on_aucune_maj)
+        self._worker.maj_disponible.connect(self._demander_telechargement)
+        self._worker.erreur.connect(self._on_maj_erreur)
+        self._worker.annule.connect(self._on_download_annule_confirme)
 
-        # progression -> barre de chargement  
-        self._worker.termine_download.connect(self._on_download_fini)  
+        self.demande_telechargement.connect(self._worker.telecharger)
+        self._worker.termine_download.connect(self._on_download_fini)
 
         self._thread.start()
 
-        self._worker.aucune_maj.connect(self._thread.quit)  
-        self._worker.erreur.connect(self._thread.quit)  
-        self._worker.termine_download.connect(self._thread.quit)  
-        self._thread.finished.connect(self._thread.deleteLater)  
+        self._worker.aucune_maj.connect(self._thread.quit)
+        self._worker.erreur.connect(self._thread.quit)
+        self._worker.termine_download.connect(self._thread.quit)
+        self._worker.annule.connect(self._thread.quit)
+        self._thread.finished.connect(self._thread.deleteLater)
+        self._thread.finished.connect(self._worker.deleteLater)
+
+    @Slot()
+    def _on_aucune_maj(self):
+        QMessageBox.information(self.page, "Mise à jour", "EpiData est déjà à jour.")
+
+    @Slot(str)
+    def _on_maj_erreur(self, msg):
+        QMessageBox.warning(self.page, "Mise à jour", f"Vérification impossible : {msg}")  
 
     def on_telecharger_bd_pt (self):
                 bd_pt=self.data_service.bd_pt
@@ -451,28 +454,59 @@ class ParametresNavigation(QObject):
                     except Exception as exc:
                         QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier Excel : {exc}")
   
-    def _demander_telechargement(self, info):  
-        rep = QMessageBox.question(  
-            self.page, "Mise à jour disponible",  
-            f"Version {info['version']} disponible. Télécharger et installer ?",  
-            QMessageBox.Yes | QMessageBox.No,  
-        )  
-        if rep != QMessageBox.Yes:  
-            return  
+    def _demander_telechargement(self, info):
+        rep = QMessageBox.question(
+            self.page, "Mise à jour disponible",
+            f"Version {info['version']} disponible. Télécharger et installer ?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if rep != QMessageBox.Yes:
+            return
 
-        # barre de progression connectée au signal du worker  
-        self._progress = QProgressDialog("Téléchargement...", "Annuler", 0, 100, self.page)  
-        self._worker.progression.connect(self._progress.setValue)  
-  
-        # ✅ on ÉMET un signal au lieu d'appeler directement -> exécution dans le thread worker  
-        self.demande_telechargement.emit(info)        
+        self._progress = QProgressDialog("Téléchargement...", "Annuler", 0, 100, self.page)
+        self._progress.setWindowTitle("Téléchargement de la mise à jour")
+        self._progress.setWindowModality(Qt.WindowModal)
+        self._progress.setMinimumDuration(0)
+        self._progress.setValue(0)
+        self._progress.show()
 
-    @Slot(str)  
-    def _on_download_fini(self, chemin):  
-        self._progress.close()
+        self._worker.progression.connect(self._progress.setValue)
+        self._progress.canceled.connect(self._on_download_annule)
+
+        self.demande_telechargement.emit(info)
+
+    @Slot(str)
+    def _on_download_fini(self, chemin):
+        if getattr(self, '_progress', None) is not None:
+            self._progress.close()
+            self._progress.deleteLater()
+            self._progress = None
+
         try:
-            import maj_logiciel  
+            import maj_logiciel
             maj_logiciel.MajGestion.appliquer_maj(chemin)
         except Exception as e:
             QMessageBox.critical(self.page, "Erreur", f"Impossible de lancer la mise à jour : {e}")
-    
+
+    @Slot()
+    def _on_download_annule(self):
+        """Appelé quand l'utilisateur clique sur 'Annuler' dans la barre de progression."""
+        if getattr(self, '_worker', None) is not None:
+            self._worker.demander_annulation()
+        if getattr(self, '_progress', None) is not None:
+            self._progress.setLabelText("Annulation en cours...")
+            # Empêche un nouveau "canceled" pendant qu'on attend la confirmation du worker
+            self._progress.setCancelButton(None)
+
+    @Slot()
+    def _on_download_annule_confirme(self):
+        """Appelé quand le worker confirme que le téléchargement a bien été arrêté."""
+        if getattr(self, '_progress', None) is not None:
+            self._progress.close()
+            self._progress.deleteLater()
+            self._progress = None
+
+        QMessageBox.information(
+            self.page, "Téléchargement annulé",
+            "Le téléchargement de la mise à jour a été annulé."
+        )

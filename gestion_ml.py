@@ -19,8 +19,6 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.svm import LinearSVC
-from sklearn.model_selection import train_test_split
-from sklearn.frozen import FrozenEstimator
 
 from services import DataService
 from utils import console, BD_ENTRAINEMENT, MODELES_DIR, nettoyer_texte
