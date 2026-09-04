@@ -3,9 +3,6 @@
 # Il constitue la couche ML : elle est appelée par la couche de traitement (data_processing.py)
 # et s'appuie sur la couche de persistance (services.py) pour la base d'entraînement.
 
-## Variables
-# bd_entrainement = base de données qui a des données utilisées pour l'entrainement des modèles (données des auteurs et utilisateurs)
-# bd_pt = base de données avec tous les produits déjà traités par le logiciel
 
 ### bibliothèques
 import os
@@ -15,13 +12,8 @@ import joblib
 import numpy as np
 import pandas as pd
 from rich.progress import Progress
-from sklearn.calibration import CalibratedClassifierCV
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.svm import LinearSVC
 
-from services import DataService
-from utils import console, BD_ENTRAINEMENT, MODELES_DIR, nettoyer_texte
+from utils import console, nettoyer_texte
 
 
 ## Code
@@ -41,6 +33,8 @@ class GestionML:
 
     def __init__(self, bd_entrainement_path=None, modeles_dir=None, data_service=None):
         """Initialise la gestion ML sans déclencher d'entraînement ni d'accès disque lourd."""
+        from utils import console, BD_ENTRAINEMENT, MODELES_DIR
+
         self.bd_entrainement_path = bd_entrainement_path or BD_ENTRAINEMENT
         self.modeles_dir = modeles_dir or MODELES_DIR
         self.data_service = data_service
@@ -97,6 +91,8 @@ class GestionML:
 
     def _obtenir_data_service(self):
         """Retourne le service de persistance utilisé pour la base d'entraînement."""
+        from services import DataService
+
         if self.data_service is None:
             self.data_service = DataService(bd_entrainement=self.bd_entrainement_path)
         return self.data_service
@@ -119,6 +115,9 @@ class GestionML:
 
     def creer_modeles(self, progress_callback=None):
         """Crée (entraîne) les modèles de machine learning et les sauvegarde sur disque."""
+        from sklearn.calibration import CalibratedClassifierCV
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        from sklearn.svm import LinearSVC
 
         def _avancer(avance, message):
             """Met à jour la progression, via Rich et/ou via le callback fourni."""
@@ -227,6 +226,7 @@ class GestionML:
         appel scikit-learn par produit.
         Retourne une liste de tuples (prediction, score_confiance).
         """
+        from sklearn.metrics.pairwise import cosine_similarity
         if not textes:
             return []
         try:

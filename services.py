@@ -9,7 +9,7 @@ import sqlite3
 import pandas as pd
 from types import SimpleNamespace
 
-from utils import console, MODELES_DIR, PARAMETRES_DIR, BD_PT, BD_ENTRAINEMENT, ressource_path
+from utils import console, BD_PT, BD_ENTRAINEMENT, ressource_path
 
 # Colonnes de la table produits, dans l'ordre du schéma défini par creer_bd_pt.
 COLONNES_PRODUITS = [
@@ -53,6 +53,8 @@ class DataService:
 
     def creer_dossiers(self):
         """Crée les dossiers nécessaires de l'application."""
+        from utils import MODELES_DIR, PARAMETRES_DIR
+
         os.makedirs(MODELES_DIR, exist_ok=True)
         os.makedirs(PARAMETRES_DIR, exist_ok=True)
         os.makedirs(os.path.dirname(self.bd_pt), exist_ok=True)

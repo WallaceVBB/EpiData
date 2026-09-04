@@ -1,13 +1,9 @@
 # Ce fichier va gérer le lancement de la mise à jour du logiciel
 
-import os  
-import sys  
+import os   
 import platform  
 import subprocess  
-import requests  
-from packaging import version
-from PySide6.QtCore import QObject, Signal
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QObject
   
 from utils import VERSION, USER_APP_DIR, console  
   
@@ -15,6 +11,7 @@ REPO = "WallaceVBB/EpiData"
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"  
 
 class MajWorker(QObject):
+    from PySide6.QtCore import Signal
     progression = Signal(int)          # % de téléchargement
     maj_disponible = Signal(dict)      # infos de la release
     aucune_maj = Signal()
@@ -73,7 +70,10 @@ class MajGestion ():
     @staticmethod
     def verifier_maj():  
         """Interroge GitHub. Retourne un dict si une MAJ existe, sinon None.  
-        Lève une exception en cas d'erreur réseau."""  
+        Lève une exception en cas d'erreur réseau."""
+        from packaging import version
+        import requests  
+
         reponse = requests.get(API_LATEST, timeout=10)  
         reponse.raise_for_status()  
         data = reponse.json()  
@@ -99,7 +99,9 @@ class MajGestion ():
     
     @staticmethod
     def telecharger_asset(url, nom_fichier, callback_progression=None):  
-        """Télécharge l'asset dans USER_APP_DIR. Retourne le chemin local."""  
+        """Télécharge l'asset dans USER_APP_DIR. Retourne le chemin local.""" 
+        import requests  
+ 
         destination = os.path.join(USER_APP_DIR, nom_fichier)  
         with requests.get(url, stream=True, timeout=30) as r:  
             r.raise_for_status()  
@@ -116,6 +118,9 @@ class MajGestion ():
     @staticmethod
     def appliquer_maj(chemin_installeur):
         """Lance l'installeur/AppImage puis ferme proprement l'application."""
+        import sys
+        from PySide6.QtWidgets import QApplication
+
         systeme = platform.system()
 
         if systeme == "Windows":

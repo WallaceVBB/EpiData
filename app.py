@@ -4,14 +4,13 @@
 import sys
 import os
 from PySide6.QtCore import QThread
-from PySide6.QtUiTools import QUiLoader
-from PySide6.QtWidgets import (QApplication,QMessageBox)
+from PySide6.QtWidgets import QApplication
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_extracteur_factures import FactureNavigation
 from navigation.n_parametres import ParametresNavigation
 from services import DataService
-from utils import console, GUI_DIR, NAVIGATION_DIR, copier_fichier_ressource_vers_utilisateur,  _est_empaquete
-from maj_logiciel import MajWorker, MajGestion 
+from utils import console, copier_fichier_ressource_vers_utilisateur,  _est_empaquete
+from maj_logiciel import MajWorker 
 
 class Application:
     def __init__(self):
@@ -69,6 +68,9 @@ class Application:
 
     def load_gui(self, filename):
         # Création du chargeur Qt
+        from PySide6.QtUiTools import QUiLoader
+        from utils import GUI_DIR
+
         loader = QUiLoader()
 
         # Construction du chemin vers le fichier .ui
@@ -159,6 +161,9 @@ class Application:
         self._thread_maj.start()  
   
     def _proposer_maj_demarrage(self, info):  
+        from maj_logiciel import MajGestion
+        from PySide6.QtWidgets import QMessageBox
+
         rep = QMessageBox.question(  
             self.window, "Mise à jour disponible",  
             f"La version {info['version']} est disponible. Télécharger et installer ?",  

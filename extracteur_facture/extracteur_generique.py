@@ -8,20 +8,9 @@ from statistics import median
 from typing import Optional
 
 import pandas as pd
-import pdfplumber
 
 from utils import TESSERACT_EXE, TESSDATA_DIR
-
-
-try:
-    import pytesseract
-
-    _OCR_AVAILABLE = True
-    _OCR_IMPORT_ERROR = None
-
-except ImportError as _e:
-    _OCR_AVAILABLE = False
-    _OCR_IMPORT_ERROR = _e
+import pytesseract
 
 
 # --- Paramètres OCR ---------------------------------------------------------
@@ -36,9 +25,6 @@ OCR_TESSDATA_CONFIG = f'--tessdata-dir {TESSDATA_DIR}'
 
 def configurer_tesseract() -> bool:
     """Configure Tesseract fourni avec EpiData."""
-
-    if not _OCR_AVAILABLE:
-        return False
 
     tesseract_exe = Path(TESSERACT_EXE)
     tessdata_dir = Path(TESSDATA_DIR)
@@ -255,6 +241,7 @@ def render_page_image(page, dpi: int = OCR_DPI):
     et à la netteté, il aide sensiblement Tesseract à séparer les caractères
     collés et à mieux repérer les virgules décimales.
     """
+
     cache = getattr(page, "_ocr_image_cache", None)
     if cache is not None and cache.get("dpi") == dpi:
         return cache["image"]
@@ -361,7 +348,7 @@ def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> lis
     # Page probablement scannée (image, pas de couche de texte exploitable) :
     # on bascule sur l'OCR. Si l'OCR échoue ou n'est pas disponible, on
     # retombe sur ce que le texte natif a pu donner (souvent rien).
-    if _OCR_AVAILABLE and _OCR_CONFIGURED:
+    if _OCR_CONFIGURED:
         try:
             image = render_page_image(page, ocr_dpi)
             ocr_out = ocr_words_from_image(image, ocr_dpi, ocr_lang)
@@ -385,7 +372,7 @@ def page_text(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> str:
     if len(re.sub(r"\s", "", text)) >= 20:
         return text
 
-    if _OCR_AVAILABLE and _OCR_CONFIGURED:
+    if _OCR_CONFIGURED:
         try:
             image = render_page_image(page, ocr_dpi)
             ocr_text = ocr_text_from_image(image, ocr_lang)
@@ -892,18 +879,12 @@ def extract_fallback_page(page, date: str) -> list[dict[str, str]]:
 
 
 def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path = "facture_extraite.xlsx", progress_callback=None) -> pd.DataFrame:
+    import pdfplumber
+
     pdf_path = Path(chemin_pdf).expanduser()
     output_path = Path(chemin_sortie_excel).expanduser()
     if not pdf_path.exists() or not pdf_path.is_file():
         raise FileNotFoundError(f"Fichier PDF introuvable : {pdf_path}")
-
-    if not _OCR_AVAILABLE:
-        print(
-            "Avertissement : pytesseract n'est pas installé. Les pages sans "
-            "texte natif (factures scannées) seront ignorées. Pour activer "
-            "l'OCR : pip install pytesseract pypdfium2 --break-system-packages "
-            "et apt-get install -y tesseract-ocr tesseract-ocr-fra"
-        )
 
     all_rows: list[dict[str, str]] = []
     last_date = ""

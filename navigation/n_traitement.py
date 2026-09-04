@@ -1,17 +1,13 @@
 ﻿# Ce fichier fait le lien entre la GUI et le traitement des produits.
 # Il contient les fonctions appelées par les boutons de la GUI pour lancer le traitement.
 
-from math import ceil
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QTimer, QThread, Signal, Qt, QSortFilterProxyModel
+from PySide6.QtCore import QThread, Signal, Qt, QSortFilterProxyModel
 from PySide6.QtGui import QStandardItemModel, QStandardItem
-from PySide6.QtWidgets import (
-    QFileDialog, QMessageBox, QHeaderView, QComboBox, QSizePolicy, QStyledItemDelegate,
-)
+from PySide6.QtWidgets import (QFileDialog, QMessageBox, QSizePolicy, QStyledItemDelegate)
 
-from data_processing import ClassificateurProduits
 from services import DataService
 from utils import BD_PT, console
 
@@ -39,6 +35,7 @@ class ComboBoxDelegate(QStyledItemDelegate):
 
     def createEditor(self, parent, option, index):
         """Crée un combobox pour éditer la cellule."""
+        from PySide6.QtWidgets import QComboBox
         combobox = QComboBox(parent)
         combobox.addItems(self.items)
         return combobox
@@ -236,6 +233,8 @@ class TraitementWorker(QThread):
         self.data_service = data_service
 
     def run(self):
+        from data_processing import ClassificateurProduits
+        
         result = {'success': True, 'message': 'Traitement terminé avec succès.'}
         imported_rows = None
 
@@ -449,6 +448,7 @@ class TraitementNavigation:
             self.pages['traitement_resultats'].b_Supprimer_Resultats.setEnabled(False)
 
     def _show_loading_page(self):
+        from PySide6.QtCore import QTimer
         loading_page = self.pages.get('traitement_chargement')
         if not loading_page:
             return
@@ -511,6 +511,9 @@ class TraitementNavigation:
         correspondant à `self._page_courante` est chargée dans le modèle Qt, pour ne
         jamais construire des centaines de milliers de QStandardItem.
         """
+        from math import ceil
+        from PySide6.QtWidgets import QHeaderView
+
         results_page = self.pages.get('traitement_resultats')
         if not results_page or not hasattr(results_page, 'Tableau_Results'):
             return

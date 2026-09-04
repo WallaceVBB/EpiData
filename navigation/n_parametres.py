@@ -5,10 +5,7 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal, QObject, Slot, Qt  
 from PySide6.QtWidgets import QMessageBox, QProgressDialog, QFileDialog  
 
-from services import DataService
-from gestion_ml import GestionML
 from utils import console,_est_empaquete
-from maj_logiciel import MajWorker, MajGestion
 
 class TraitementModelesWorker(QThread):
     """Réalise la création des modèles ML hors du thread UI."""
@@ -23,6 +20,10 @@ class TraitementModelesWorker(QThread):
 
     def run(self):
         """Exécute la récréation des modèles dans un thread séparé."""
+        from gestion_ml import GestionML
+        from services import DataService
+
+
         try:
             self.progress_updated.emit(0, "Initialisation de la récréation des modèles...")
 
@@ -318,6 +319,8 @@ class ParametresNavigation(QObject):
         )
 
     def on_maj_logiciel(self):
+        from maj_logiciel import MajWorker
+
         if not _est_empaquete():
             QMessageBox.information(
                 self.page, "Mise à jour",
@@ -483,8 +486,8 @@ class ParametresNavigation(QObject):
             self._progress = None
 
         try:
-            import maj_logiciel
-            maj_logiciel.MajGestion.appliquer_maj(chemin)
+            from maj_logiciel import MajGestion
+            MajGestion.appliquer_maj(chemin)
         except Exception as e:
             QMessageBox.critical(self.page, "Erreur", f"Impossible de lancer la mise à jour : {e}")
 

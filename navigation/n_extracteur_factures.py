@@ -7,13 +7,6 @@ from pathlib import Path
 from PySide6.QtCore import QThread, Signal, QTimer
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
-from extracteur_facture import extracteur_generique, extracteur_jardimed
-
-EXTRACTEURS = {
-    "generique": extracteur_generique,
-    "jardimed": extracteur_jardimed,
-}
-
 
 class FactureWorker(QThread):
     finished = Signal(bool, str, object, str)
@@ -62,7 +55,15 @@ class FactureWorker(QThread):
         return len(reader.pages)
 
     def _load_extractor_module(self, extractor_name):
-        return EXTRACTEURS.get(extractor_name)
+        if extractor_name == "generique":
+            from extracteur_facture import extracteur_generique
+            return extracteur_generique
+
+        if extractor_name == "jardimed":
+            from extracteur_facture import extracteur_jardimed
+            return extracteur_jardimed
+
+        return None
 
 
 class FactureNavigation:

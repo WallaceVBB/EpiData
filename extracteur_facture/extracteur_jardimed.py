@@ -1,14 +1,12 @@
 import re
 from pathlib import Path
 
-import pandas as pd
-from pypdf import PdfReader
-
-
-def extraire_facture_pdf(
-    chemin_pdf, chemin_sortie_excel="facture_extraite.xlsx", progress_callback=None
-):
+def extraire_facture_pdf(chemin_pdf, chemin_sortie_excel="facture_extraite.xlsx", progress_callback=None):
     """Extrait les lignes de produits d'une facture PDF et les enregistre dans un fichier Excel."""
+
+    from pypdf import PdfReader
+    import pandas as pd
+
     chemin_pdf = Path(chemin_pdf).expanduser()
     if not chemin_pdf.exists() or not chemin_pdf.is_file():
         raise FileNotFoundError(f"Le fichier PDF suivant est introuvable : {chemin_pdf}")
