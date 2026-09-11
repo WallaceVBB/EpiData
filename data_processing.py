@@ -59,8 +59,8 @@ class ClassificateurProduits:
         self._REGEX_PACKAGING_COMPLEXE = re.compile(r'\(?(\d+)\s*[xX*]\s*(\d+[,.]?\d*)\s*(g|kg|ml|l|u|unités?|pièces?|tr|t)?\)?', re.IGNORECASE)
         self._REGEX_PACKAGING_SIMPLE = re.compile(r'(?<![\w])(\d+)\s*(unités?|pièces?|u|tranches?|barquettes?)\b', re.IGNORECASE)
         self._REGEX_PACKAGING_XONLY = re.compile(r'[xX*]\s*(\d+)')
-        self._REGEX_ORIGINE = re.compile(r'(?<!\w)({}?)(?!\w)')
-        self._REGEX_LABEL = re.compile(r'(?<!\w)({}?)(?!\w)')
+        self._REGEX_ORIGINE = re.compile(r'(?<!\w)(?:{})(?!\w)')
+        self._REGEX_LABEL   = re.compile(r'(?<!\w)(?:{})(?!\w)')
 
         # Charger les données depuis le service
         self._charger_donnees_service()
@@ -124,14 +124,56 @@ class ClassificateurProduits:
             rf'(\d+[,.]?\d*)(?:-(\d+[,.]?\d*))?\s?({unites_regex})(?=\w*\b)', re.IGNORECASE)
 
     @staticmethod
-    def _compiler_regex_dictionnaire(dictionnaire, gabarit):
-        """Compile une regex par clé d'un dictionnaire {clé: [écritures]}."""
+    def _est_code_2_lettres(variante: str) -> bool:
+        """Un code pays / région de 2 lettres (fr, nl, es, pe, br, do, bs, bb, …)."""
+        v = variante.strip()
+        return len(v) == 2 and v.isalpha()
+
+    def _compiler_regex_dictionnaire(self, dictionnaire, gabarit):
         regex_compilees = []
+        erreurs = []
+
         for cle, ecritures in dictionnaire.items():
-            ecritures_propres = [re.escape(str(v).strip().lower()) for v in ecritures if str(v).strip()]
-            if not ecritures_propres:
-                continue
-            regex_compilees.append((cle, re.compile(gabarit.format('|'.join(ecritures_propres)))))
+            if isinstance(ecritures, str):
+                ecritures = [ecritures]
+
+            noms, codes = [], []
+            for v in ecritures:
+                if not isinstance(v, str):
+                    continue
+                v = v.strip().lower()
+                if not v:
+                    continue
+                if len(v) == 2 and v.isalpha():
+                    codes.append(re.escape(v))
+                else:
+                    noms.append(re.escape(v))
+
+            if noms:
+                pattern = '|'.join(noms)
+                try:
+                    regex_compilees.append((cle, re.compile(gabarit.format(pattern))))
+                except re.error as e:
+                    erreurs.append((cle, 'noms', pattern, str(e)))
+
+            if codes:
+                pattern = '|'.join(codes)
+                try:
+                    regex_compilees.append((
+                        cle,
+                        re.compile(rf'(?<!\w)(?:{pattern})(?=[^\w]*$)'),
+                    ))
+                except re.error as e:
+                    erreurs.append((cle, 'codes', pattern, str(e)))
+
+        if erreurs:
+            import sys
+            print(f"[_compiler_regex_dictionnaire] {len(erreurs)} erreur(s) "
+                f"de compilation :", file=sys.stderr)
+            for cle, type_, pattern, msg in erreurs[:10]:
+                print(f"  - {cle} ({type_}) pattern={pattern!r} → {msg}",
+                    file=sys.stderr)
+
         return regex_compilees
 
     def _charger_parametres(self):
@@ -202,31 +244,55 @@ class ClassificateurProduits:
 
         return self._fournisseur_par_siret.get(str(siret).strip())
 
+    # (motif dans le texte, origines à ignorer) — faux positifs contextuels connus
+    EXCEPTIONS_ORIGINE_CONTEXTE = [
+        (re.compile(r'\bpetits?\s+suisses?\b'), {'Suisse'}),
+        (re.compile(r'\bpeits?\s+suisses?\b'), {'Suisse'}),
+        (re.compile(r'\bchili\s+con\b'),        {'Chili'}),   
+        (re.compile(r'\bsaveur\s+chili\b'),     {'Chili'}),
+        (re.compile(r'\bnoodles?\s+chili\b'),   {'Chili'}),
+        (re.compile(r'\bsobas?\s+chili\b'),     {'Chili'}),
+        (re.compile(r'\bau\s+calvados\b'),      {'Calvados'}),
+        (re.compile(r'\bchamp(?:ignons?)?\s+de\s+paris\b'), {'Paris'}),
+        (re.compile(r'\bjambon?\s+paris\b'), {'Paris'}),
+        (re.compile(r'\blots?\s*[*x×\-/.]?\s*\d'),             {'Lot'}),
+        (re.compile(r'\blots?\s+(?:de|x|×|\*)\b'),             {'Lot'}),
+        (re.compile(r'\byaourts?\s+grecs?\b'),  {'Grèce'}),
+        (re.compile(r'\byogourts?\s+grecs?\b'), {'Grèce'}),
+        (re.compile(r'\bà\s+la\s+grecque\b'),   {'Grèce'}),
+        (re.compile(r'\bpalets?\s+breton(?:s|ne|nes)?\b'), {'Bretagne'}),
+        (re.compile(r'\bvanille\s+de\s+madagascar\b'), {'Madagascar'}),
+    ]
+
     def extraire_origine(self, texte):
+        if not isinstance(texte, str) or not texte:
+            return None
         try:
-            exceptions_origine = [
-                "petit suisse"]
-            texte = texte.lower()
+            texte_lower = texte.lower()
 
-            # Vérifier d'abord si le texte contient une des exceptions
-            for exception in exceptions_origine:
-                if exception in texte:
-                    return None
+            origines_bloquees = set()
+            for motif, origines_a_bloquer in self.EXCEPTIONS_ORIGINE_CONTEXTE:
+                if motif.search(texte_lower):
+                    origines_bloquees |= origines_a_bloquer
 
-            # Si pas une exception, procéder à la recherche normale d'origine
-            for origines, regex_origine in self._regex_par_origine:
-                if regex_origine.search(texte):
-                    return origines
-        except Exception:
-            pass
+            for origine, regex_origine in self._regex_par_origine:
+                if origine in origines_bloquees:
+                    continue
+                if regex_origine.search(texte_lower):
+                    return origine
+        except Exception as e:
+            from utils import console
+            console.print(f"[red]extraire_origine a échoué sur {texte!r}: {e}")
         return None
 
     def extraire_label(self, texte):
         labels_trouves = []
         try:
-            texte = texte.lower()
+            if not isinstance(texte, str) or not texte:
+                return None
+            texte_lower = texte.lower()
             for label, regex_label in self._regex_par_label:
-                if regex_label.search(texte):
+                if regex_label.search(texte_lower) and label not in labels_trouves:
                     labels_trouves.append(label)
         except Exception:
             pass
