@@ -15,7 +15,7 @@ from utils import TESSDATA_DIR, TESSERACT_EXE
 OCR_DPI = 300
 OCR_LANG = "fra+eng"
 OCR_MIN_WORDS_FOR_TEXT_LAYER = 5
-OCR_MIN_CONFIDENCE = 40
+OCR_MIN_CONFIDENCE = 20
 
 OCR_TESSDATA_CONFIG = f'--tessdata-dir {TESSDATA_DIR}'
 
@@ -69,7 +69,7 @@ NON_PRODUCT_TERMS = (
     "adresse siège", "adresse siege", "code fournisseur", "n° commande", "n° bl",
     "n° commande(s)", "n° bl(s)", "facturé :", "facture :", "page :", "notre iban",
     "taux des pénalités", "taux des penalites", "nos dernières cgv", "nos dernieres cgv",
-    "nf525", "e-fac",
+    "nf525", "e-fac","dlc:", "dlc :", "ddm:", "ddm :",
 )
 
 HEADER_ALIASES = {
@@ -226,18 +226,58 @@ class ColumnModel:
     amount_x: float | None
 
 
+def _otsu_threshold(arr) -> int:
+    """Seuil binaire optimal (méthode d'Otsu), sans dépendance externe.
+
+    Maximise la variance inter-classe entre pixels "fond" et "texte".
+    Contrairement à un seuil codé en dur, s'adapte automatiquement à la
+    luminosité du scan (contrairement à ImageOps.autocontrast, qui étire le
+    contraste existant mais n'aplatit pas les fonds gris/zébrés utilisés par
+    certains fournisseurs pour distinguer les lignes du tableau — ce qui les
+    rendait souvent illisibles pour Tesseract).
+    """
+    import numpy as np
+
+    hist, _ = np.histogram(arr, bins=256, range=(0, 256))
+    total = arr.size
+    sum_all = np.dot(np.arange(256), hist)
+    sumB = 0.0
+    wB = 0.0
+    max_var = 0.0
+    threshold = 128
+    for i in range(256):
+        wB += hist[i]
+        if wB == 0:
+            continue
+        wF = total - wB
+        if wF == 0:
+            break
+        sumB += i * hist[i]
+        mB = sumB / wB
+        mF = (sum_all - sumB) / wF
+        var_between = wB * wF * (mB - mF) ** 2
+        if var_between > max_var:
+            max_var = var_between
+            threshold = i
+    return threshold
+
+
 def render_page_image(page, dpi: int = OCR_DPI):
     """Rasterise une page pdfplumber en image PIL, avec mise en cache sur la
     page elle-même pour éviter de rasteriser deux fois (une fois pour les
     mots, une fois pour le texte brut de secours utilisé par invoice_date).
 
-    L'image est prétraitée (niveaux de gris, sur-échantillonnage, contraste,
-    netteté) car les factures scannées reçues par les fournisseurs sont
-    souvent numérisées à basse résolution (~150 dpi) : un sur-échantillonnage
-    brut ne crée pas d'information, mais combiné à l'ajustement de contraste
-    et à la netteté, il aide sensiblement Tesseract à séparer les caractères
-    collés et à mieux repérer les virgules décimales.
+    L'image est binarisée (niveaux de gris -> noir/blanc pur par seuil
+    d'Otsu) après sur-échantillonnage, car les factures scannées reçues par
+    les fournisseurs sont souvent numérisées à basse résolution (~150 dpi)
+    ET certaines impriment un fond zébré gris/blanc en alternance sur les
+    lignes du tableau produits. Un simple autocontrast+sharpen amplifie le
+    bruit du fond gris au lieu du texte et peut faire disparaître des lignes
+    entières côté OCR ; la binarisation par seuil aplatit tous les fonds
+    (gris ou blancs) en blanc pur et ne garde que le texte en noir, ce qui
+    donne un contraste maximal quelle que soit la couleur de fond de la ligne.
     """
+    import numpy as np
 
     cache = getattr(page, "_ocr_image_cache", None)
     if cache is not None and cache.get("dpi") == dpi:
@@ -245,13 +285,13 @@ def render_page_image(page, dpi: int = OCR_DPI):
     image = page.to_image(resolution=dpi).original
     try:
         from PIL import Image as PILImage
-        from PIL import ImageFilter, ImageOps
         gray = image.convert("L")
         w, h = gray.size
         gray = gray.resize((w * 2, h * 2), PILImage.LANCZOS)
-        gray = ImageOps.autocontrast(gray)
-        gray = gray.filter(ImageFilter.SHARPEN)
-        image = gray
+        arr = np.array(gray)
+        t = _otsu_threshold(arr)
+        bw = np.where(arr > t, 255, 0).astype("uint8")
+        image = PILImage.fromarray(bw)
     except Exception:
         pass
     page._ocr_image_cache = {"dpi": dpi, "image": image}
@@ -381,11 +421,18 @@ def page_text(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> str:
             pass
     return text
 
+_PRODUCT_CODE_IN_TEXT_RE = re.compile(r"\bV\d{4}\b")
 
 def group_lines(words: list[Word], tolerance: float = 3.2) -> list[Line]:
     lines: list[Line] = []
     for word in sorted(words, key=lambda w: (w.top, w.x0)):
-        if not lines or abs(word.top - lines[-1].top) > tolerance:
+        same = lines and abs(word.top - lines[-1].top) <= tolerance
+        # Si le mot courant est un code produit, ne pas le coller à la ligne
+        # précédente : elle contient probablement l'en-tête du tableau.
+        if same and _PRODUCT_CODE_IN_TEXT_RE.search(word.text) and \
+           not _PRODUCT_CODE_IN_TEXT_RE.search(lines[-1].text):
+            same = False
+        if not same:
             lines.append(Line(word.top, [word]))
         else:
             lines[-1].words.append(word)
@@ -401,6 +448,16 @@ def header_hit_count(line: Line) -> dict[str, list[Word]]:
                 found[cat].append(w)
     return found
 
+_PRODUCT_CODE_RE = re.compile(r"\bV\d{4}\b")
+_BL_RE = re.compile(r"\bBL\b\s*N[°o]", re.IGNORECASE)
+
+def _looks_like_product_start(text: str) -> bool:
+    t = normalize_text(text)
+    if _PRODUCT_CODE_RE.search(t):
+        return True
+    if _BL_RE.search(t):
+        return True
+    return False
 
 def find_header(lines: list[Line], page_width: float) -> tuple[int, int, ColumnModel] | None:
     candidates = []
@@ -408,10 +465,11 @@ def find_header(lines: list[Line], page_width: float) -> tuple[int, int, ColumnM
         # Un header peut s'étendre sur 3 lignes maximum.
         window = []
         for j in range(i, min(i + 5, len(lines))):
-            if lines[j].top - line.top <= 48:
-                window.append(lines[j])
-            else:
+            if lines[j].top - line.top > 48:
                 break
+            if _looks_like_product_start(lines[j].text):
+                break
+            window.append(lines[j])
         all_words = [w for ln in window for w in ln.words]
         found = {k: [] for k in HEADER_ALIASES}
         for w in all_words:
@@ -421,6 +479,8 @@ def find_header(lines: list[Line], page_width: float) -> tuple[int, int, ColumnM
                     found[cat].append(w)
         present = {k for k, v in found.items() if v}
         if not {"designation", "quantity"}.issubset(present):
+            continue
+        if _looks_like_product_start(line.text):
             continue
         # Le vrai tableau comporte généralement aussi prix + montant ou TVA.
         score = 10
@@ -668,11 +728,18 @@ def _compact_unit_parts(text: str) -> list[str] | None:
         return [m.group(1), m.group(2)]
     return None
 
+def _strip_origine_suffix(words: list[Word]) -> list[Word]:
+    words = sorted(words, key=lambda w: w.x0)
+    for i, w in enumerate(words):
+        if token_key(w.text) == "origine":
+            return words[:i]
+    return words
 
 def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
-    ws = sorted(line.words, key=lambda w: w.x0)
-    text = line.text
+    ws = _strip_origine_suffix(line.words)
+    text = " ".join(w.text for w in ws)
     if not text or is_summary(text) or is_non_product(text):
+        print(f"[drop] is_non_product={is_non_product(text)} text={text[:90]!r}") # DEBUG
         return None
 
     # Une vraie ligne produit doit commencer dans la zone de désignation et
@@ -683,6 +750,7 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
     numeric = [w for w in ws if _is_quantity_candidate(w)]
     numeric_right = [w for w in numeric if w.xmid >= model.designation_end - 5]
     if not numeric_right:
+        print(f"[drop numeric] {text[:120]!r}") # DEBUG
         return None
 
     # Quantité : priorité à l'ancre de la colonne, mais seulement aux nombres
@@ -695,6 +763,7 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
     # Les prix sont les valeurs explicitement placées dans les colonnes de prix.
     prices = [w for w in ws if is_plausible_price(w) and w.xmid > quantity.x1 - 3]
     if len(prices) < 2:
+        print(f"[drop prices] {text[:120]!r} prices={[w.text for w in prices]}") # DEBUG
         return None
 
     pu = nearest_word(prices, model.unit_price_x, numeric=False) if model.unit_price_x is not None else None
@@ -808,10 +877,16 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
 
     rows = []
     current = None
-    for line in lines[h_end + 1:]:
+
+    for raw_line in lines[h_end + 1:]:
+        stripped = _strip_origine_suffix(raw_line.words)
+        if not stripped:
+            continue
+        line = Line(raw_line.top, stripped)
         text = line.text
         if not text:
             continue
+        print(f"[line] {text[:160]!r}")   # <-- DEBUG
         if is_summary(text):
             if current is not None and current.get("__score", 0) >= 0.70:
                 current["Date Facture"] = date
