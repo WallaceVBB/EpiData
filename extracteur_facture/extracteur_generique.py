@@ -282,14 +282,11 @@ def render_page_image(page, dpi: int = OCR_DPI):
     mots, une fois pour le texte brut de secours utilisé par invoice_date).
 
     L'image est binarisée (niveaux de gris -> noir/blanc pur par seuil
-    d'Otsu) après sur-échantillonnage, car les factures scannées reçues par
-    les fournisseurs sont souvent numérisées à basse résolution (~150 dpi)
-    ET certaines impriment un fond zébré gris/blanc en alternance sur les
-    lignes du tableau produits. Un simple autocontrast+sharpen amplifie le
-    bruit du fond gris au lieu du texte et peut faire disparaître des lignes
-    entières côté OCR ; la binarisation par seuil aplatit tous les fonds
-    (gris ou blancs) en blanc pur et ne garde que le texte en noir, ce qui
-    donne un contraste maximal quelle que soit la couleur de fond de la ligne.
+    d'Otsu) après sur-échantillonnage, car certaines impriment un fond 
+    zébré gris/blanc en alternance sur les lignes du tableau produits. 
+    La binarisation par seuil aplatit tous les fonds (gris ou blancs)
+     en blanc pur et ne garde que le texte en noir, ce qui donne un
+     contraste maximal quelle que soit la couleur de fond de la ligne.
     """
     import numpy as np
 
@@ -928,16 +925,10 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
         # appartenant à la ligne suivante (typiquement la ligne "Origine :"),
         # à cause d'un léger décalage vertical interne à Tesseract. On ne
         # récupère que les valeurs numériques de la ligne suivante situées
-        # dans la zone des colonnes chiffrées — jamais son texte — et
+        # dans la zone des colonnes chiffrées (jamais son texte) — et
         # seulement si la ligne courante ressemble à un début de produit
         # (code Vxxxx ou "- NOM EN MAJUSCULES"), pour ne pas perturber les
         # lignes déjà correctement reconnues.
-        #
-        # Note : on ne filtre la ligne suivante que par is_summary(), pas
-        # is_non_product() — une ligne "Origine : ... DLC : ... DDM :" est
-        # classée non-produit à raison (elle ne doit jamais devenir une
-        # ligne produit à part entière), mais c'est justement là que les
-        # données numériques égarées se trouvent le plus souvent.
         looks_like_product = bool(
             _PRODUCT_CODE_RE.search(text) or re.search(r"-\s*[A-ZÀ-Ÿ]{3,}", text)
         )
@@ -1011,22 +1002,45 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
     if not pdf_path.exists() or not pdf_path.is_file():
         raise FileNotFoundError(f"Fichier PDF introuvable : {pdf_path}")
 
+    # --- Répartition de la barre de progression par phases ----------------
+
+    #   0  -  5 %  : préparation (ouverture PDF, comptage des pages)
+    #   5  - 40 %  : lecture / OCR du texte brut de chaque page
+    #  40  - 90 %  : extraction des lignes produits page par page
+    #  90  -100 %  : écriture du fichier Excel
+    PHASE_PREP    = (0, 5)
+    PHASE_READ    = (5, 40)
+    PHASE_EXTRACT = (40, 90)
+    PHASE_WRITE   = (90, 100)
+
+    def report(pct, msg):
+        if progress_callback:
+            progress_callback(int(pct), msg)
+
+    report(PHASE_PREP[0], "Ouverture du PDF...")
+
     all_rows: list[dict[str, str]] = []
     last_date = ""
+
     with pdfplumber.open(pdf_path) as pdf:
         pages = list(pdf.pages)
-        # page_text() bascule automatiquement sur l'OCR pour les pages sans
-        # couche de texte exploitable (voir la docstring du module).
-        page_texts = [page_text(pg) for pg in pages]
+        n_pages = max(len(pages), 1)
+        report(PHASE_PREP[1], f"PDF ouvert : {n_pages} page(s)")
 
+        # --- Phase 1 : lecture / OCR du texte brut de chaque page ---------
+        page_texts: list[str] = []
+        read_start, read_end = PHASE_READ
+        for i, pg in enumerate(pages, start=1):
+            page_texts.append(page_text(pg))
+            pct = read_start + (read_end - read_start) * (i / n_pages)
+            report(pct, f"Lecture de la page {i}/{n_pages}")
+
+        # --- Phase 2 : extraction des lignes produits ---------------------
+        extract_start, extract_end = PHASE_EXTRACT
         for page_num, page in enumerate(pages, start=1):
             text = page_texts[page_num - 1]
             d = invoice_date(text, page)
 
-            # Si la première page d'une facture a une date corrompue, le PDF
-            # contient souvent la vraie date sur la page récapitulative suivante
-            # via « Date base ». On regarde les deux pages suivantes uniquement
-            # lorsqu'aucune date n'a été trouvée sur la page courante.
             if not d:
                 for offset in (1, 2):
                     idx = page_num - 1 + offset
@@ -1037,8 +1051,6 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
                     if d and re.search(r"date\s+base", normalize_key(candidate_text), re.IGNORECASE):
                         break
                     if re.search(r"total\s+(?:ht|ttc)|net\s+à\s+payer|net\s+a\s+payer", normalize_key(candidate_text), re.IGNORECASE):
-                        # Cette page ressemble déjà à une page récapitulative ; inutile
-                        # de continuer à chercher plus loin pour cette facture.
                         if d:
                             break
                     d = ""
@@ -1050,21 +1062,25 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
             if not rows:
                 rows = extract_fallback_page(page, d)
             all_rows.extend(rows)
-            if progress_callback:
-                progress_callback(int(10 + page_num / max(len(pdf.pages), 1) * 80), f"Analyse de la page {page_num}/{len(pdf.pages)}")
 
-    # Nettoyage final : colonnes fixes, pas de score dans Excel.
+            pct = extract_start + (extract_end - extract_start) * (page_num / n_pages)
+            report(pct, f"Analyse de la page {page_num}/{n_pages}")
+
+    # --- Phase 3 : écriture du fichier Excel ------------------------------
+    report(PHASE_WRITE[0], "Préparation du fichier Excel...")
+
     final_rows = []
     for row in all_rows:
         clean = {c: normalize_text(row.get(c, "")) for c in STANDARD_COLUMNS}
         if not clean["Désignation"]:
             continue
         final_rows.append(clean)
+
     df = pd.DataFrame(final_rows, columns=STANDARD_COLUMNS)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
         df.to_excel(writer, sheet_name="Produits", index=False)
-    if progress_callback:
-        progress_callback(100, f"Extraction réussie : {len(df)} ligne(s)")
+
+    report(PHASE_WRITE[1], f"Extraction réussie : {len(df)} ligne(s)")
     print(f"Extraction réussie : {len(df)} ligne(s) enregistrée(s) dans '{output_path}'.")
     return df
