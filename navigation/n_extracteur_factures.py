@@ -6,7 +6,9 @@ Il est utilisé pour lancer le traitement des factures à partir de l'interface 
 import os
 from pathlib import Path
 
+import pandas as pd
 from PySide6.QtCore import QThread, Signal
+from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 
 
@@ -117,8 +119,32 @@ class FactureNavigation:
 
         self._current_results_df = result_df
         self._current_output_path = output_path
+        self._populate_results_table(result_df)
         self._show_results_page()
         QMessageBox.information(self.page, "Conversion terminée", message)
+
+    def _populate_results_table(self, result_df):
+        results_page = self.pages.get('convertisseur_pdf_resultats')
+        if not results_page or not hasattr(results_page, 'Tableau_Resultats'):
+            return
+
+        if not isinstance(result_df, pd.DataFrame):
+            raise TypeError("Le résultat de la conversion doit être un DataFrame pandas.")
+
+        model = QStandardItemModel(results_page.Tableau_Resultats)
+        model.setColumnCount(len(result_df.columns))
+        model.setHorizontalHeaderLabels([str(column) for column in result_df.columns])
+
+        for row_index, (_, row) in enumerate(result_df.iterrows()):
+            items = []
+            for value in row:
+                value_text = '' if pd.isna(value) else str(value)
+                items.append(QStandardItem(value_text))
+            model.appendRow(items)
+
+        results_page.Tableau_Resultats.setModel(model)
+        results_page.Tableau_Resultats.setAlternatingRowColors(True)
+        results_page.Tableau_Resultats.resizeColumnsToContents()
 
     def on_progress_update(self, value, message):
         if value is not None:
