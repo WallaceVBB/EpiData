@@ -12,7 +12,7 @@ from utils import TESSDATA_DIR, TESSERACT_EXE
 
 # --- Paramètres OCR ---------------------------------------------------------
 
-OCR_DPI = 300
+OCR_DPI = 600
 OCR_LANG = "fra+eng"
 OCR_MIN_WORDS_FOR_TEXT_LAYER = 5
 OCR_MIN_CONFIDENCE = 20
@@ -140,6 +140,7 @@ def is_plausible_price(w: Word) -> bool:
         return True
     digits = re.sub(r"[^0-9]", "", w.text)
     return len(digits) >= 2 or bool(re.search(r"[.,]", w.text))
+
 
 def is_ocr_zero_amount(value: str) -> bool:
     """Reconnaît les variantes OCR très caractéristiques de "0,00€" observées
@@ -752,7 +753,6 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
     ws = _strip_origine_suffix(line.words)
     text = " ".join(w.text for w in ws)
     if not text or is_summary(text) or is_non_product(text):
-        print(f"[drop] is_non_product={is_non_product(text)} text={text[:90]!r}") # DEBUG
         return None
 
     # Une vraie ligne produit doit commencer dans la zone de désignation et
@@ -763,7 +763,6 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
     numeric = [w for w in ws if _is_quantity_candidate(w)]
     numeric_right = [w for w in numeric if w.xmid >= model.designation_end - 5]
     if not numeric_right:
-        print(f"[drop numeric] {text[:120]!r}") # DEBUG
         return None
 
     # Quantité : priorité à l'ancre de la colonne, mais seulement aux nombres
@@ -786,7 +785,6 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
         if w.xmid > quantity.x1 - 3 and not is_plausible_price(w) and is_ocr_zero_amount(w.text)
     ]
     if len(prices) < 2:
-        print(f"[drop prices] {text[:120]!r} prices={[w.text for w in prices]}") # DEBUG
         return None
 
     pu = nearest_word(prices, model.unit_price_x, numeric=False) if model.unit_price_x is not None else None
