@@ -92,7 +92,7 @@ UNIT_WORDS = {
 
 _NUM_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d+)?)$")
 _PERCENT_RE = re.compile(r"^[+-]?\d+(?:[\.,]\d+)?\s*%$")
-_PRICE_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d+)?)[ ]*€?$", re.IGNORECASE)
+_PRICE_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d+)?)[ .]*€?$", re.IGNORECASE)
 
 def normalize_text(value: str) -> str:
     s = str(value or "")
@@ -141,6 +141,19 @@ def is_plausible_price(w: Word) -> bool:
     digits = re.sub(r"[^0-9]", "", w.text)
     return len(digits) >= 2 or bool(re.search(r"[.,]", w.text))
 
+def is_ocr_zero_amount(value: str) -> bool:
+    """Reconnaît les variantes OCR très caractéristiques de "0,00€" observées
+    sur les lignes à quantité livrée nulle (ex. "D00E", "DODE", "DO00€E") :
+    Tesseract confond fréquemment 0/O/D sur ce petit montant, quelle que
+    soit la résolution utilisée. Le motif est volontairement strict (2 à 5
+    caractères pris uniquement dans {D,0,O,o}, suivis d'un éventuel €/E/.)
+    pour ne jamais confondre avec d'autres tokens de 2-3 lettres du tableau
+    (CO, KG, DOM, DLC...).
+    """
+    return bool(_OCR_ZERO_AMOUNT_RE.match(normalize_text(value)))
+
+
+_OCR_ZERO_AMOUNT_RE = re.compile(r"^[D0Oo]{2,5}[€E.]{0,3}$")
 
 def is_unit_word(value: str) -> bool:
     return token_key(value) in {token_key(x) for x in UNIT_WORDS}
@@ -761,7 +774,17 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
         return None
 
     # Les prix sont les valeurs explicitement placées dans les colonnes de prix.
+    # On inclut aussi les variantes OCR très caractéristiques de "0,00€"
+    # (ex. "D00E", "DODE") : sur les lignes à quantité livrée nulle, ce
+    # montant est presque toujours lu comme des lettres D/O plutôt que des
+    # chiffres, et le rejeter fait perdre la ligne entière faute d'un
+    # deuxième prix.
     prices = [w for w in ws if is_plausible_price(w) and w.xmid > quantity.x1 - 3]
+    prices += [
+        Word("0,00€", w.x0, w.x1, w.top, w.bottom, is_ocr=w.is_ocr)
+        for w in ws
+        if w.xmid > quantity.x1 - 3 and not is_plausible_price(w) and is_ocr_zero_amount(w.text)
+    ]
     if len(prices) < 2:
         print(f"[drop prices] {text[:120]!r} prices={[w.text for w in prices]}") # DEBUG
         return None
@@ -878,7 +901,8 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
     rows = []
     current = None
 
-    for raw_line in lines[h_end + 1:]:
+    body_lines = lines[h_end + 1:]
+    for idx, raw_line in enumerate(body_lines):
         stripped = _strip_origine_suffix(raw_line.words)
         if not stripped:
             continue
@@ -886,7 +910,6 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
         text = line.text
         if not text:
             continue
-        print(f"[line] {text[:160]!r}")   # <-- DEBUG
         if is_summary(text):
             if current is not None and current.get("__score", 0) >= 0.70:
                 current["Date Facture"] = date
@@ -895,14 +918,45 @@ def extract_page(page, date: str) -> list[dict[str, str]]:
                 rows.append(current)
                 current = None
             continue
-        # Une fois un pied de page détecté, on ne cherche plus de produit sous celui-ci.
         k = normalize_key(text)
         if "nf525" in k or "e-fac" in k or k.startswith("page :"):
             break
-        # Ne jamais classer les lignes administratives comme produit.
         if is_non_product(text):
             continue
         parsed = parse_product_line(line, model)
+
+        # Repêchage : sur les scans bruités, les colonnes chiffrées d'une
+        # ligne produit peuvent être détectées par Tesseract comme
+        # appartenant à la ligne suivante (typiquement la ligne "Origine :"),
+        # à cause d'un léger décalage vertical interne à Tesseract. On ne
+        # récupère que les valeurs numériques de la ligne suivante situées
+        # dans la zone des colonnes chiffrées — jamais son texte — et
+        # seulement si la ligne courante ressemble à un début de produit
+        # (code Vxxxx ou "- NOM EN MAJUSCULES"), pour ne pas perturber les
+        # lignes déjà correctement reconnues.
+        #
+        # Note : on ne filtre la ligne suivante que par is_summary(), pas
+        # is_non_product() — une ligne "Origine : ... DLC : ... DDM :" est
+        # classée non-produit à raison (elle ne doit jamais devenir une
+        # ligne produit à part entière), mais c'est justement là que les
+        # données numériques égarées se trouvent le plus souvent.
+        looks_like_product = bool(
+            _PRODUCT_CODE_RE.search(text) or re.search(r"-\s*[A-ZÀ-Ÿ]{3,}", text)
+        )
+        if parsed is None and looks_like_product and idx + 1 < len(body_lines):
+            next_line = body_lines[idx + 1]
+            if not is_summary(next_line.text):
+                extra_numeric = [
+                    w for w in next_line.words
+                    if w.xmid > model.designation_end + 35
+                    and (is_number(w.text) or is_price(w.text) or is_percent(w.text))
+                ]
+                if extra_numeric:
+                    merged = Line(line.top, line.words + extra_numeric)
+                    retry = parse_product_line(merged, model)
+                    if retry:
+                        parsed = retry
+
         if parsed:
             if current is not None and current.get("__score", 0) >= 0.70:
                 current["Date Facture"] = date
