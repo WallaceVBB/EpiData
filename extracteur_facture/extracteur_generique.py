@@ -315,19 +315,25 @@ def render_page_image(page, dpi: int = OCR_DPI):
     return image
 
 
-def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> list[Word]:
-    scale = 72.0 / (dpi * 2)
-    # --psm 4 : "une colonne de texte de tailles variables" — le mode le
-    # plus robuste ici pour des lignes de tableau, en évitant que Tesseract
-    # ne fusionne les deux blocs d'en-tête (gauche/droite) du haut de page.
+def _ocr_data_from_image(image, lang: str = OCR_LANG):
     config = f'--psm 4 {OCR_TESSDATA_CONFIG}'
     try:
-        data = pytesseract.image_to_data(image, lang=lang, config=config, output_type=pytesseract.Output.DICT)
+        return pytesseract.image_to_data(
+            image,
+            lang=lang,
+            config=config,
+            output_type=pytesseract.Output.DICT,
+        )
     except Exception as e:
         print(f"[OCR] Erreur image_to_data : "
               f"{type(e).__name__}: {e}")
-        return []
+        return None
 
+
+def _ocr_words_from_data(data, dpi: int = OCR_DPI) -> list[Word]:
+    scale = 72.0 / (dpi * 2)
+    if data is None:
+        return []
     n = len(data.get("text", []))
     raw_words = []
     for i in range(n):
@@ -373,13 +379,62 @@ def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> lis
     return out
 
 
+def _ocr_text_from_data(data) -> str:
+    if data is None:
+        return ""
+
+    lines: dict[tuple, list[str]] = {}
+    line_order: list[tuple] = []
+    for i, value in enumerate(data.get("text", [])):
+        text = normalize_text(value)
+        if not text:
+            continue
+        key = (
+            data["block_num"][i],
+            data["par_num"][i],
+            data["line_num"][i],
+        )
+        if key not in lines:
+            lines[key] = []
+            line_order.append(key)
+        lines[key].append(text)
+    return "\n".join(" ".join(lines[key]) for key in line_order)
+
+
+def ocr_page_from_image(
+    image,
+    dpi: int = OCR_DPI,
+    lang: str = OCR_LANG,
+) -> tuple[list[Word], str]:
+    """Effectue une seule passe Tesseract pour les mots et le texte brut."""
+    data = _ocr_data_from_image(image, lang)
+    return _ocr_words_from_data(data, dpi), _ocr_text_from_data(data)
+
+
+def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> list[Word]:
+    words, _ = ocr_page_from_image(image, dpi, lang)
+    return words
+
+
 def ocr_text_from_image(image, lang: str = OCR_LANG) -> str:
-    try:
-        return pytesseract.image_to_string(image, lang=lang, config="--psm 4") or ""
-    except Exception as e:
-        print(f"[OCR] Erreur image_to_string : "
-              f"{type(e).__name__}: {e}")
-    return ""
+    _, text = ocr_page_from_image(image, OCR_DPI, lang)
+    return text
+
+
+def _cached_ocr_page(page, ocr_dpi: int, ocr_lang: str) -> tuple[list[Word], str]:
+    cache = getattr(page, "_ocr_result_cache", None)
+    cache_key = (ocr_dpi, ocr_lang)
+    if cache is not None and cache.get("key") == cache_key:
+        return cache["words"], cache["text"]
+
+    image = render_page_image(page, ocr_dpi)
+    words, text = ocr_page_from_image(image, ocr_dpi, ocr_lang)
+    page._ocr_result_cache = {
+        "key": cache_key,
+        "words": words,
+        "text": text,
+    }
+    return words, text
 
 
 def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> list[Word]:
@@ -405,8 +460,7 @@ def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> lis
     # retombe sur ce que le texte natif a pu donner (souvent rien).
     if _OCR_CONFIGURED:
         try:
-            image = render_page_image(page, ocr_dpi)
-            ocr_out = ocr_words_from_image(image, ocr_dpi, ocr_lang)
+            ocr_out, _ = _cached_ocr_page(page, ocr_dpi, ocr_lang)
             if len(ocr_out) > len(out):
                 page._used_ocr = True
                 return ocr_out
@@ -429,8 +483,7 @@ def page_text(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> str:
 
     if _OCR_CONFIGURED:
         try:
-            image = render_page_image(page, ocr_dpi)
-            ocr_text = ocr_text_from_image(image, ocr_lang)
+            _, ocr_text = _cached_ocr_page(page, ocr_dpi, ocr_lang)
             if len(re.sub(r"\s", "", ocr_text)) > len(re.sub(r"\s", "", text)):
                 page._used_ocr = True
                 return ocr_text
@@ -1092,13 +1145,13 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
     # --- Répartition de la barre de progression par phases ----------------
 
     #   0  -  5 %  : préparation (ouverture PDF, comptage des pages)
-    #   5  - 40 %  : lecture / OCR du texte brut de chaque page
-    #  40  - 90 %  : extraction des lignes produits page par page
-    #  90  -100 %  : écriture du fichier Excel
+    #   5  - 90 %  : lecture / OCR du texte brut de chaque page
+    #  90  - 95 %  : extraction des lignes produits page par page
+    #  95  -100 %  : écriture du fichier Excel
     PHASE_PREP    = (0, 5)
-    PHASE_READ    = (5, 40)
-    PHASE_EXTRACT = (40, 90)
-    PHASE_WRITE   = (90, 100)
+    PHASE_READ    = (5, 90)
+    PHASE_EXTRACT = (90, 95)
+    PHASE_WRITE   = (95, 100)
 
     def report(pct, msg):
         if progress_callback:
