@@ -58,7 +58,7 @@ def extraire_facture_pdf(chemin_pdf, chemin_sortie_excel="facture_extraite.xlsx"
     for page_num, page in enumerate(reader.pages, start=1):
         if progress_callback:
             progress_callback(
-                int(10 + (page_num / total_pages) * 80),
+                int(5 + (page_num / total_pages) * 85),
                 f"Analyse de la page {page_num}/{total_pages}"
             )
 

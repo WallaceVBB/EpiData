@@ -31,7 +31,7 @@ class FactureWorker(QThread):
                 raise RuntimeError("Impossible de charger l'extracteur demandé.")
 
             def progress_callback(progress, message):
-                self.progress_updated.emit(int(progress), message)
+                self.progress_updated.emit(max(0, min(int(progress), 100)), message)
 
             result = module.extraire_facture_pdf(
                 self.pdf_path,
