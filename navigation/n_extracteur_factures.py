@@ -9,7 +9,7 @@ from pathlib import Path
 import pandas as pd
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
-from PySide6.QtWidgets import QFileDialog, QMessageBox
+from PySide6.QtWidgets import QFileDialog, QMessageBox, QSizePolicy
 
 
 class FactureWorker(QThread):
@@ -67,6 +67,7 @@ class FactureNavigation:
         self._current_output_path = None
         self._current_results_df = None
         self._connect_buttons()
+        self._configurer_redimensionnement()
 
     def _connect_buttons(self):
         if hasattr(self.page, 'b_Convertir_Facture_generique'):
@@ -182,6 +183,21 @@ class FactureNavigation:
         if not results_page:
             return
         self.show_page('convertisseur_pdf_resultats')
+
+    def _configurer_redimensionnement(self):
+        # Colonnes redimensionnables à la souris (Interactive) + dernière colonne qui
+        # absorbe l'espace restant quand la fenêtre est redimensionnée (stretchLastSection).
+        # Combo suffisant : pas besoin d'un redimensionnement proportionnel personnalisé.
+        results_page = self.pages.get('traitement_resultats')
+        if not results_page:
+            return
+
+        results_page.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        if hasattr(results_page, 'Tableau_Results'):
+            table_view = results_page.Tableau_Results
+            table_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+            table_view.horizontalHeader().setStretchLastSection(True)
 
     def on_telecharger_excel(self):
         if not self._current_output_path or not os.path.exists(self._current_output_path):
