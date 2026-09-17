@@ -5,6 +5,7 @@ import os
 import sys
 
 from PySide6.QtCore import QObject
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 
 from navigation.n_extracteur_factures import FactureNavigation
@@ -14,13 +15,14 @@ from navigation.n_credits import CreditsNavigation
 from navigation.n_a_propos import ProposNavigation
 from navigation.n_maj import MajNavigation
 from services import DataService
-from utils import copier_fichier_ressource_vers_utilisateur
+from utils import copier_fichier_ressource_vers_utilisateur, ressource_path
 
 
 class Application (QObject):
     def __init__(self):
         # Création de l'application Qt
         self.app = QApplication(sys.argv)
+        self.app.setWindowIcon(QIcon(ressource_path(os.path.join("icons", "epidata_logo.ico"))))
 
         # Copie des ressources vers le dossier utilisateur lors de la première exécution
         copier_fichier_ressource_vers_utilisateur()
@@ -30,6 +32,7 @@ class Application (QObject):
 
         # Chargement de la fenêtre principale
         self.window = self.load_gui("mainwindow.ui")
+        self.window.setWindowIcon(self.app.windowIcon())
 
         # Dictionnaire contenant toutes les pages
         self.pages = {}
