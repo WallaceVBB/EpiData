@@ -50,7 +50,7 @@ def configurer_tesseract() -> bool:
 _OCR_CONFIGURED = configurer_tesseract()
 
 STANDARD_COLUMNS = [
-    "Date Facture", "Désignation", "Quantité", "Unité",
+    "Date Facture", "Désignation", "Quantité", "Unité", "Nb. colis", "Qté Livrée",
     "Prix unitaire HT", "Montant net HT", "Taux TVA", "Source extraction",
 ]
 
@@ -76,6 +76,8 @@ HEADER_ALIASES = {
     "designation": {"designation", "article", "produit", "description", "libelle", "intitule", "item"},
     "quantity": {"quantite", "qte", "qty", "quantity", "nombre"},
     "unit": {"unite", "uf", "unit", "unites", "conditionnement"},
+    "package_count": {"colis", "colisage"},
+    "delivered_quantity": {"livree", "livre", "livraison"},
     "unit_price": {"pu", "prix", "unitaire", "tarif"},
     "amount": {"montant", "net", "amount", "total", "mt", "ht"},
     "vat": {"tva", "vat", "taxe", "taux"},
@@ -89,6 +91,8 @@ UNIT_WORDS = {
     "botte", "barquette", "bac", "palette", "paquet", "lot", "bouteille", "douzaine",
     "douzaines", "sachet", "sachets", "flt", "plateau", "pot", "pots",
 }
+
+PACKAGE_UNIT_WORDS = {"co", "col", "colis"}
 
 _NUM_RE = re.compile(r"^[+-]?(?:\d+(?:[\.,]\d+)?|\d{1,3}(?:[ .]\d{3})+(?:[\.,]\d+)?)$")
 _PERCENT_RE = re.compile(r"^[+-]?\d+(?:[\.,]\d+)?\s*%$")
@@ -238,6 +242,8 @@ class ColumnModel:
     unit_price_x: float | None
     vat_x: float | None
     amount_x: float | None
+    package_count_x: float | None = None
+    delivered_quantity_x: float | None = None
 
 
 def _otsu_threshold(arr) -> int:
@@ -309,19 +315,25 @@ def render_page_image(page, dpi: int = OCR_DPI):
     return image
 
 
-def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> list[Word]:
-    scale = 72.0 / (dpi * 2)
-    # --psm 4 : "une colonne de texte de tailles variables" — le mode le
-    # plus robuste ici pour des lignes de tableau, en évitant que Tesseract
-    # ne fusionne les deux blocs d'en-tête (gauche/droite) du haut de page.
+def _ocr_data_from_image(image, lang: str = OCR_LANG):
     config = f'--psm 4 {OCR_TESSDATA_CONFIG}'
     try:
-        data = pytesseract.image_to_data(image, lang=lang, config=config, output_type=pytesseract.Output.DICT)
+        return pytesseract.image_to_data(
+            image,
+            lang=lang,
+            config=config,
+            output_type=pytesseract.Output.DICT,
+        )
     except Exception as e:
         print(f"[OCR] Erreur image_to_data : "
               f"{type(e).__name__}: {e}")
-        return []
+        return None
 
+
+def _ocr_words_from_data(data, dpi: int = OCR_DPI) -> list[Word]:
+    scale = 72.0 / (dpi * 2)
+    if data is None:
+        return []
     n = len(data.get("text", []))
     raw_words = []
     for i in range(n):
@@ -367,13 +379,62 @@ def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> lis
     return out
 
 
+def _ocr_text_from_data(data) -> str:
+    if data is None:
+        return ""
+
+    lines: dict[tuple, list[str]] = {}
+    line_order: list[tuple] = []
+    for i, value in enumerate(data.get("text", [])):
+        text = normalize_text(value)
+        if not text:
+            continue
+        key = (
+            data["block_num"][i],
+            data["par_num"][i],
+            data["line_num"][i],
+        )
+        if key not in lines:
+            lines[key] = []
+            line_order.append(key)
+        lines[key].append(text)
+    return "\n".join(" ".join(lines[key]) for key in line_order)
+
+
+def ocr_page_from_image(
+    image,
+    dpi: int = OCR_DPI,
+    lang: str = OCR_LANG,
+) -> tuple[list[Word], str]:
+    """Effectue une seule passe Tesseract pour les mots et le texte brut."""
+    data = _ocr_data_from_image(image, lang)
+    return _ocr_words_from_data(data, dpi), _ocr_text_from_data(data)
+
+
+def ocr_words_from_image(image, dpi: int = OCR_DPI, lang: str = OCR_LANG) -> list[Word]:
+    words, _ = ocr_page_from_image(image, dpi, lang)
+    return words
+
+
 def ocr_text_from_image(image, lang: str = OCR_LANG) -> str:
-    try:
-        return pytesseract.image_to_string(image, lang=lang, config="--psm 4") or ""
-    except Exception as e:
-        print(f"[OCR] Erreur image_to_string : "
-              f"{type(e).__name__}: {e}")
-    return ""
+    _, text = ocr_page_from_image(image, OCR_DPI, lang)
+    return text
+
+
+def _cached_ocr_page(page, ocr_dpi: int, ocr_lang: str) -> tuple[list[Word], str]:
+    cache = getattr(page, "_ocr_result_cache", None)
+    cache_key = (ocr_dpi, ocr_lang)
+    if cache is not None and cache.get("key") == cache_key:
+        return cache["words"], cache["text"]
+
+    image = render_page_image(page, ocr_dpi)
+    words, text = ocr_page_from_image(image, ocr_dpi, ocr_lang)
+    page._ocr_result_cache = {
+        "key": cache_key,
+        "words": words,
+        "text": text,
+    }
+    return words, text
 
 
 def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> list[Word]:
@@ -399,8 +460,7 @@ def extract_words(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> lis
     # retombe sur ce que le texte natif a pu donner (souvent rien).
     if _OCR_CONFIGURED:
         try:
-            image = render_page_image(page, ocr_dpi)
-            ocr_out = ocr_words_from_image(image, ocr_dpi, ocr_lang)
+            ocr_out, _ = _cached_ocr_page(page, ocr_dpi, ocr_lang)
             if len(ocr_out) > len(out):
                 page._used_ocr = True
                 return ocr_out
@@ -423,8 +483,7 @@ def page_text(page, ocr_dpi: int = OCR_DPI, ocr_lang: str = OCR_LANG) -> str:
 
     if _OCR_CONFIGURED:
         try:
-            image = render_page_image(page, ocr_dpi)
-            ocr_text = ocr_text_from_image(image, ocr_lang)
+            _, ocr_text = _cached_ocr_page(page, ocr_dpi, ocr_lang)
             if len(re.sub(r"\s", "", ocr_text)) > len(re.sub(r"\s", "", text)):
                 page._used_ocr = True
                 return ocr_text
@@ -461,12 +520,17 @@ def header_hit_count(line: Line) -> dict[str, list[Word]]:
 
 _PRODUCT_CODE_RE = re.compile(r"\bV\d{4}\b")
 _BL_RE = re.compile(r"\bBL\b\s*N[°o]", re.IGNORECASE)
+_DELIVERY_GROUP_RE = re.compile(
+    r"(?i)\bbon de livraison\b|\blivr[eé]\s+le\s+\d{2}[./-]\d{2}[./-]\d{4}"
+)
 
 def _looks_like_product_start(text: str) -> bool:
     t = normalize_text(text)
     if _PRODUCT_CODE_RE.search(t):
         return True
     if _BL_RE.search(t):
+        return True
+    if _DELIVERY_GROUP_RE.search(t):
         return True
     return False
 
@@ -524,7 +588,12 @@ def find_header(lines: list[Line], page_width: float) -> tuple[int, int, ColumnM
                 if token_key(w.text) == "mt":
                     ax = w.xmid
                 break
-        candidates.append((score, i, len(window), ColumnModel(min(w.x0 for w in found["designation"]), des_end, qx, ux, None, upx, vx, ax)))
+        pcx = min(w.xmid for w in found["package_count"]) if found["package_count"] else None
+        dqx = min(w.xmid for w in found["delivered_quantity"]) if found["delivered_quantity"] else None
+        candidates.append((score, i, len(window), ColumnModel(
+            min(w.x0 for w in found["designation"]), des_end, qx, ux, None,
+            upx, vx, ax, pcx, dqx,
+        )))
 
     if not candidates:
         return None
@@ -739,6 +808,44 @@ def _compact_unit_parts(text: str) -> list[str] | None:
         return [m.group(1), m.group(2)]
     return None
 
+
+def _is_package_quantity_candidate(word: Word) -> bool:
+    if _is_quantity_candidate(word):
+        return True
+    return bool(re.fullmatch(
+        r"\d+(?:[\.,]\d+)?(?:co|col|colis)",
+        token_key(word.text),
+        re.IGNORECASE,
+    ))
+
+
+def _column_value_with_unit(
+    words: list[Word],
+    value: Word | None,
+    unit_words: set[str],
+    right_limit: float | None = None,
+) -> str:
+    if value is None:
+        return ""
+
+    compact = re.fullmatch(
+        r"(\d+(?:[\.,]\d+)?)(co|col|colis)",
+        token_key(value.text),
+        re.IGNORECASE,
+    )
+    if compact and unit_words == PACKAGE_UNIT_WORDS:
+        return normalize_text(f"{compact.group(1)} {compact.group(2).upper()}")
+
+    normalized_units = {token_key(item) for item in unit_words}
+    for word in sorted(words, key=lambda item: item.x0):
+        if word.x0 < value.x1 - 2:
+            continue
+        if right_limit is not None and word.xmid >= right_limit:
+            continue
+        if token_key(word.text) in normalized_units:
+            return normalize_text(f"{value.text} {word.text}")
+    return normalize_text(value.text)
+
 def _strip_origine_suffix(words: list[Word]) -> list[Word]:
     words = sorted(words, key=lambda w: w.x0)
     for i, w in enumerate(words):
@@ -795,6 +902,36 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
     if amount.xmid <= pu.xmid:
         return None
 
+    package_count = None
+    if model.package_count_x is not None:
+        package_candidates = [
+            w for w in ws
+            if w.xmid > quantity.x1 - 2
+            and w.xmid < pu.xmid - 10
+            and _is_package_quantity_candidate(w)
+            and w is not quantity
+        ]
+        if package_candidates:
+            package_count = min(
+                package_candidates,
+                key=lambda w: abs(w.xmid - model.package_count_x),
+            )
+
+    delivered_quantity = None
+    if model.delivered_quantity_x is not None:
+        delivered_candidates = [
+            w for w in ws
+            if w.xmid > quantity.x1 - 2
+            and w.xmid < pu.xmid - 10
+            and _is_quantity_candidate(w)
+            and w is not quantity
+        ]
+        if delivered_candidates:
+            delivered_quantity = min(
+                delivered_candidates,
+                key=lambda w: abs(w.xmid - model.delivered_quantity_x),
+            )
+
     # Désignation : uniquement les mots de la vraie zone Désignation.
     left = [w for w in ws if w.x0 >= model.designation_start - 4 and w.xmid < model.quantity_x - 10]
     designation = " ".join(w.text for w in left).strip()
@@ -838,6 +975,14 @@ def parse_product_line(line: Line, model: ColumnModel) -> dict[str, str] | None:
         "Désignation": normalize_text(designation),
         "Quantité": normalize_text(quantity.text),
         "Unité": normalize_text(" ".join(unit_parts)),
+        "Nb. colis": _column_value_with_unit(
+            ws, package_count, PACKAGE_UNIT_WORDS,
+            right_limit=model.delivered_quantity_x,
+        ),
+        "Qté Livrée": _column_value_with_unit(
+            ws, delivered_quantity, UNIT_WORDS,
+            right_limit=model.unit_price_x,
+        ),
         "Prix unitaire HT": normalize_text(pu.text),
         "Montant net HT": normalize_text(amount.text),
         "Taux TVA": vat,
@@ -1005,13 +1150,13 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
     # --- Répartition de la barre de progression par phases ----------------
 
     #   0  -  5 %  : préparation (ouverture PDF, comptage des pages)
-    #   5  - 40 %  : lecture / OCR du texte brut de chaque page
-    #  40  - 90 %  : extraction des lignes produits page par page
-    #  90  -100 %  : écriture du fichier Excel
+    #   5  - 90 %  : lecture / OCR du texte brut de chaque page
+    #  90  - 95 %  : extraction des lignes produits page par page
+    #  95  -100 %  : écriture du fichier Excel
     PHASE_PREP    = (0, 5)
-    PHASE_READ    = (5, 40)
-    PHASE_EXTRACT = (40, 90)
-    PHASE_WRITE   = (90, 100)
+    PHASE_READ    = (5, 90)
+    PHASE_EXTRACT = (90, 95)
+    PHASE_WRITE   = (95, 100)
 
     def report(pct, msg):
         if progress_callback:
