@@ -520,12 +520,17 @@ def header_hit_count(line: Line) -> dict[str, list[Word]]:
 
 _PRODUCT_CODE_RE = re.compile(r"\bV\d{4}\b")
 _BL_RE = re.compile(r"\bBL\b\s*N[°o]", re.IGNORECASE)
+_DELIVERY_GROUP_RE = re.compile(
+    r"(?i)\bbon de livraison\b|\blivr[eé]\s+le\s+\d{2}[./-]\d{2}[./-]\d{4}"
+)
 
 def _looks_like_product_start(text: str) -> bool:
     t = normalize_text(text)
     if _PRODUCT_CODE_RE.search(t):
         return True
     if _BL_RE.search(t):
+        return True
+    if _DELIVERY_GROUP_RE.search(t):
         return True
     return False
 
