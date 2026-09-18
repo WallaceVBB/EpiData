@@ -51,7 +51,7 @@
       <number>0</number>
      </property>
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;Selectionnez un fichier Excel ou CSV Les lignes de produits seront traiter pour que le logiciel puisse predire la catégorie du produit, son poids, ses labels et son origine.&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;Selectionnez un fichier Excel ou CSV&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;Les lignes de produits seront traitées pour que le logiciel puisse predire la catégorie du produit, son poids, ses labels et son origine.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -80,7 +80,7 @@
    <item>
     <widget class="QLabel" name="label_3">
      <property name="text">
-      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt;Pour traiter un fichier stardardisé, il doit contenir les colonnes :&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt;designation (obligatoire)&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt;fournisseur (optionnel)&lt;/span&gt;&lt;/p&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt;siret [du fournisseur] (optionnel)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+      <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt;Pour traiter un fichier stardardisé, il doit contenir les colonnes : &lt;/span&gt;&lt;span style=&quot; font-size:10pt; font-weight:700;&quot;&gt;designation&lt;/span&gt;&lt;span style=&quot; font-size:10pt;&quot;&gt; (obligatoire), fournisseur (optionnel), siret [du fournisseur] (optionnel)&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>

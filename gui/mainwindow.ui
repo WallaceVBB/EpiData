@@ -154,6 +154,9 @@
      <kerning>true</kerning>
     </font>
    </property>
+   <property name="focusPolicy">
+    <enum>Qt::FocusPolicy::NoFocus</enum>
+   </property>
    <property name="autoFillBackground">
     <bool>false</bool>
    </property>
@@ -174,6 +177,14 @@
     <addaction name="actionCr_dits"/>
    </widget>
    <widget class="QMenu" name="menuParam_tres">
+    <property name="geometry">
+     <rect>
+      <x>331</x>
+      <y>124</y>
+      <width>191</width>
+      <height>110</height>
+     </rect>
+    </property>
     <property name="title">
      <string>Paramètres</string>
     </property>
