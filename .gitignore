@@ -214,3 +214,6 @@ __marimo__/
 #Fichiers testes
 /benchmark_out
 /tests/facture_teste.pdf
+
+# Développement
+.qtcreator
