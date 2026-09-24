@@ -1,0 +1,316 @@
+/* ============================================================
+   Feuille de style globale — couleurs du logo EpiData
+   #0097b2 (couleur principale) / #0cc0df (couleur secondaire, claire)
+
+   Appliquée une seule fois via QApplication.setStyleSheet() dans app.py.
+
+   Deux façons d'accrocher un style :
+   1) objectName  -> pour un widget unique (ex: frame_sidebar)
+   2) class (propriété dynamique) -> réutilisable sur n'importe quelle page.
+      Dans Qt Designer : clic droit sur le widget > "Edit dynamic
+      properties..." > "+" > type "string" > nom "class" > valeur voulue.
+
+   Les règles de base (QPushButton, QLineEdit, QComboBox, etc. sans
+   sélecteur de classe) s'appliquent automatiquement partout, sans rien
+   tagger : chaque nouvelle page en bénéficie déjà.
+   ============================================================ */
+
+/* ---------- Base ---------- */
+QWidget {
+	font-family: "Segoe UI";
+}
+
+QMainWindow,
+#centralwidget,
+QStackedWidget,
+QStackedWidget > QWidget {
+	background-color: #f4f7f8;
+}
+
+QLabel {
+	color: #2b2f33;
+}
+
+/* ---------- Sidebar (mainwindow.ui) ---------- */
+QFrame#frame_sidebar {
+	background-color: #0097b2;
+}
+QFrame#frame_sidebar QPushButton {
+	color: white;
+	background-color: transparent;
+	border: none;
+	text-align: left;
+	padding-left: 12px;
+	border-radius: 0px;
+}
+QFrame#frame_sidebar QPushButton:hover {
+	background-color: #0cc0df;
+}
+QFrame#frame_sidebar QPushButton:checked {
+	background-color: #0cc0df;
+	font-weight: bold;
+}
+QFrame#frame_sidebar QPushButton:disabled {
+	color: rgba(255, 255, 255, 90);
+}
+
+/* ---------- Typographie ---------- */
+/* class = page-title : gros titre en haut de page */
+QLabel[class="page-title"] {
+	color: #0097b2;
+}
+/* class = section-title : sous-titre de section, dans le corps d'une page */
+QLabel[class="section-title"] {
+	color: #007e94;
+	font-weight: 600;
+}
+/* class = muted-text : texte secondaire, moins important */
+QLabel[class="muted-text"] {
+	color: #7a8085;
+}
+/* class = highlight-text : mise en avant d'un mot-clé dans une phrase */
+QLabel[class="highlight-text"] {
+	color: #0097b2;
+	font-weight: 600;
+}
+
+/* ---------- Ligne d'accent sous un titre ---------- */
+/* class = accent-line */
+QFrame[class="accent-line"] {
+	background-color: #0cc0df;
+	border: none;
+}
+
+/* ---------- Boutons ---------- */
+/* Style par défaut, pour tout QPushButton qui n'est ni dans la sidebar,
+   ni tagué avec une classe spécifique (boutons de dialogues, OK/Annuler, etc.) */
+QPushButton {
+	background-color: #0097b2;
+	color: white;
+	border: none;
+	border-radius: 6px;
+	padding: 8px 18px;
+	font-size: 10pt;
+}
+QPushButton:hover {
+	background-color: #0cc0df;
+}
+QPushButton:pressed {
+	background-color: #007e94;
+}
+QPushButton:disabled {
+	background-color: #c9c9c9;
+	color: #f0f0f0;
+}
+
+/* class = card-button : gros bouton "carte" des pages de sélection */
+QPushButton[class="card-button"] {
+	border-radius: 10px;
+	padding: 18px 16px;
+	font-size: 11pt;
+	font-weight: 600;
+	text-align: center;
+}
+
+/* class = secondary-button : bouton secondaire, contour uniquement
+   (ex: "Retour", "Annuler" dans une page, à côté d'une action principale) */
+QPushButton[class="secondary-button"] {
+	background-color: transparent;
+	color: #0097b2;
+	border: 2px solid #0097b2;
+	border-radius: 6px;
+	padding: 8px 18px;
+}
+QPushButton[class="secondary-button"]:hover {
+	background-color: #e6f7fa;
+}
+QPushButton[class="secondary-button"]:pressed {
+	background-color: #cceef4;
+}
+QPushButton[class="secondary-button"]:disabled {
+	color: #c9c9c9;
+	border-color: #c9c9c9;
+	background-color: transparent;
+}
+
+/* ---------- Champs de formulaire ---------- */
+QLineEdit,
+QPlainTextEdit,
+QTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QDateEdit,
+QDateTimeEdit {
+	background-color: white;
+	border: 1px solid #d5dbde;
+	border-radius: 5px;
+	padding: 6px 8px;
+	selection-background-color: #0cc0df;
+	selection-color: white;
+}
+QLineEdit:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QDateEdit:focus,
+QDateTimeEdit:focus {
+	border: 1px solid #0097b2;
+}
+QLineEdit:disabled,
+QPlainTextEdit:disabled,
+QComboBox:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled {
+	background-color: #f0f0f0;
+	color: #a0a5a8;
+}
+QComboBox::drop-down {
+	border: none;
+	width: 24px;
+}
+QComboBox QAbstractItemView {
+	background-color: white;
+	border: 1px solid #d5dbde;
+	selection-background-color: #0cc0df;
+	selection-color: white;
+	outline: none;
+}
+
+/* ---------- Cases à cocher / boutons radio ---------- */
+QCheckBox::indicator,
+QRadioButton::indicator {
+	width: 16px;
+	height: 16px;
+	border: 1px solid #b6bcc0;
+	background-color: white;
+}
+QCheckBox::indicator {
+	border-radius: 4px;
+}
+QRadioButton::indicator {
+	border-radius: 8px;
+}
+QCheckBox::indicator:checked,
+QRadioButton::indicator:checked {
+	background-color: #0097b2;
+	border: 1px solid #0097b2;
+}
+QCheckBox::indicator:hover,
+QRadioButton::indicator:hover {
+	border: 1px solid #0097b2;
+}
+
+/* ---------- Barre de progression ---------- */
+QProgressBar {
+	background-color: #e4e9eb;
+	border: none;
+	border-radius: 6px;
+	height: 12px;
+	text-align: center;
+	color: #2b2f33;
+}
+QProgressBar::chunk {
+	background-color: #0097b2;
+	border-radius: 6px;
+}
+
+/* ---------- Tableaux ---------- */
+QTableView,
+QTableWidget {
+	background-color: white;
+	alternate-background-color: #f4f7f8;
+	gridline-color: #e4e9eb;
+	border: 1px solid #e4e9eb;
+	border-radius: 6px;
+	selection-background-color: #0cc0df;
+	selection-color: white;
+}
+QHeaderView::section {
+	background-color: #0097b2;
+	color: white;
+	padding: 6px;
+	border: none;
+	font-weight: 600;
+}
+
+/* ---------- Boîte de groupe ---------- */
+QGroupBox {
+	border: 1px solid #d5dbde;
+	border-radius: 8px;
+	margin-top: 14px;
+	padding-top: 12px;
+	font-weight: 600;
+	color: #007e94;
+}
+QGroupBox::title {
+	subcontrol-origin: margin;
+	left: 12px;
+	padding: 0 6px;
+}
+
+/* ---------- Onglets ---------- */
+QTabWidget::pane {
+	border: 1px solid #d5dbde;
+	border-radius: 6px;
+	background-color: white;
+}
+QTabBar::tab {
+	background-color: #e4e9eb;
+	color: #2b2f33;
+	padding: 8px 16px;
+	border-top-left-radius: 6px;
+	border-top-right-radius: 6px;
+	margin-right: 2px;
+}
+QTabBar::tab:selected {
+	background-color: #0097b2;
+	color: white;
+}
+
+/* ---------- Ascenseurs ---------- */
+QScrollBar:vertical {
+	background: transparent;
+	width: 10px;
+	margin: 0px;
+}
+QScrollBar::handle:vertical {
+	background: #c3cacd;
+	border-radius: 5px;
+	min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+	background: #0cc0df;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+	height: 0px;
+}
+QScrollBar:horizontal {
+	background: transparent;
+	height: 10px;
+	margin: 0px;
+}
+QScrollBar::handle:horizontal {
+	background: #c3cacd;
+	border-radius: 5px;
+	min-width: 24px;
+}
+QScrollBar::handle:horizontal:hover {
+	background: #0cc0df;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+	width: 0px;
+}
+
+/* ---------- Infobulles ---------- */
+QToolTip {
+	background-color: #2b2f33;
+	color: white;
+	border: none;
+	padding: 4px 8px;
+	border-radius: 4px;
+}

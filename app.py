@@ -4,7 +4,7 @@
 import os
 import sys
 
-from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve
+from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve, QSettings
 from PySide6.QtGui import QIcon, QPixmap, QTransform
 from PySide6.QtWidgets import QApplication
 
@@ -15,7 +15,7 @@ from navigation.n_credits import CreditsNavigation
 from navigation.n_a_propos import ProposNavigation
 from navigation.n_maj import MajNavigation
 from services import DataService
-from utils import copier_fichier_ressource_vers_utilisateur, ressource_path
+from utils import copier_fichier_ressource_vers_utilisateur, ressource_path, GUI_DIR
 
 
 class Application (QObject):
@@ -23,6 +23,11 @@ class Application (QObject):
         # Création de l'application Qt
         self.app = QApplication(sys.argv)
         self.app.setWindowIcon(QIcon(ressource_path(os.path.join("icons", "epidata_logo.ico"))))
+
+        # Application du style global (couleurs du logo), partagé par toutes les pages
+        self.settings = QSettings("EpiData", "EpiData")
+        self.theme = self.settings.value("theme", "light")
+        self.charger_style_global()
 
         # Copie des ressources vers le dossier utilisateur lors de la première exécution
         copier_fichier_ressource_vers_utilisateur()
@@ -76,6 +81,23 @@ class Application (QObject):
 
         # Afficher la page d'accueil au démarrage
         self.show_page("accueil")
+
+    def charger_style_global(self):
+        style_dark = os.path.join(GUI_DIR, "styles_dark.qss")
+        style_light = os.path.join(GUI_DIR, "styles_light.qss")
+        nom_fichier = style_dark if self.theme == "dark" else style_light
+        style_path = ressource_path(nom_fichier)
+        try:
+            with open(style_path, "r", encoding="utf-8") as fichier_style:
+                self.app.setStyleSheet(fichier_style.read())
+        except OSError:
+            # L'app continue de fonctionner sans style personnalisé si le fichier est introuvable
+            pass
+
+    def basculer_theme(self):
+        self.theme = "dark" if self.theme == "light" else "light"
+        self.settings.setValue("theme", self.theme)
+        self.charger_style_global()
 
     def setup_icons(self):
         # Les chemins relatifs (../icons/...) mis dans le .ui ne se résolvent pas de façon

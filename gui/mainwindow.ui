@@ -76,37 +76,15 @@
      <widget class="QFrame" name="frame_sidebar">
       <property name="minimumSize">
        <size>
-        <width>200</width>
+        <width>230</width>
         <height>0</height>
        </size>
       </property>
       <property name="maximumSize">
        <size>
-        <width>200</width>
+        <width>230</width>
         <height>16777215</height>
        </size>
-      </property>
-      <property name="styleSheet">
-       <string notr="true">QFrame#frame_sidebar {
-	background-color: #0097b2;
-}
-QPushButton {
-	color: white;
-	background-color: transparent;
-	border: none;
-	text-align: left;
-	padding-left: 12px;
-}
-QPushButton:hover {
-	background-color: #0cc0df;
-}
-QPushButton:checked {
-	background-color: #0cc0df;
-	font-weight: bold;
-}
-QPushButton:disabled {
-	color: rgba(255, 255, 255, 90);
-}</string>
       </property>
       <property name="frameShape">
        <enum>QFrame::Shape::NoFrame</enum>
@@ -192,7 +170,7 @@ QPushButton:disabled {
           </size>
          </property>
          <property name="text">
-          <string>Traiter designations</string>
+          <string>Traitement de produits</string>
          </property>
          <property name="iconSize">
           <size>

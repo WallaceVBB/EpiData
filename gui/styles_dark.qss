@@ -1,0 +1,308 @@
+/* ============================================================
+   Feuille de style globale — MODE SOMBRE
+   Mêmes sélecteurs et classes que styles_light.qss : toute page qui
+   fonctionne avec le mode clair fonctionne avec celui-ci sans rien
+   changer côté .ui.
+
+   #0097b2 (couleur principale) / #0cc0df (couleur secondaire, claire)
+   restent utilisées comme accent, sur un fond sombre.
+   ============================================================ */
+
+/* ---------- Base ---------- */
+QWidget {
+	font-family: "Segoe UI";
+}
+
+QMainWindow,
+#centralwidget,
+QStackedWidget,
+QStackedWidget > QWidget {
+	background-color: #1c1f22;
+}
+
+QLabel {
+	color: #e6e9ea;
+}
+
+/* ---------- Sidebar (mainwindow.ui) ---------- */
+QFrame#frame_sidebar {
+	background-color: #0097b2;
+}
+QFrame#frame_sidebar QPushButton {
+	color: white;
+	background-color: transparent;
+	border: none;
+	text-align: left;
+	padding-left: 12px;
+	border-radius: 0px;
+}
+QFrame#frame_sidebar QPushButton:hover {
+	background-color: #0cc0df;
+}
+QFrame#frame_sidebar QPushButton:checked {
+	background-color: #0cc0df;
+	font-weight: bold;
+}
+QFrame#frame_sidebar QPushButton:disabled {
+	color: rgba(255, 255, 255, 90);
+}
+
+/* ---------- Typographie ---------- */
+QLabel[class="page-title"] {
+	color: #4fd6ef;
+}
+QLabel[class="section-title"] {
+	color: #4fd6ef;
+	font-weight: 600;
+}
+QLabel[class="muted-text"] {
+	color: #9aa1a6;
+}
+QLabel[class="highlight-text"] {
+	color: #4fd6ef;
+	font-weight: 600;
+}
+
+/* ---------- Ligne d'accent sous un titre ---------- */
+QFrame[class="accent-line"] {
+	background-color: #0cc0df;
+	border: none;
+}
+
+/* ---------- Boutons ---------- */
+QPushButton {
+	background-color: #0097b2;
+	color: white;
+	border: none;
+	border-radius: 6px;
+	padding: 8px 18px;
+	font-size: 10pt;
+}
+QPushButton:hover {
+	background-color: #0cc0df;
+}
+QPushButton:pressed {
+	background-color: #007e94;
+}
+QPushButton:disabled {
+	background-color: #3a3f43;
+	color: #7a8085;
+}
+
+QPushButton[class="card-button"] {
+	border-radius: 10px;
+	padding: 18px 16px;
+	font-size: 11pt;
+	font-weight: 600;
+	text-align: center;
+}
+
+QPushButton[class="secondary-button"] {
+	background-color: transparent;
+	color: #4fd6ef;
+	border: 2px solid #4fd6ef;
+	border-radius: 6px;
+	padding: 8px 18px;
+}
+QPushButton[class="secondary-button"]:hover {
+	background-color: rgba(12, 192, 223, 0.15);
+}
+QPushButton[class="secondary-button"]:pressed {
+	background-color: rgba(12, 192, 223, 0.28);
+}
+QPushButton[class="secondary-button"]:disabled {
+	color: #5a6165;
+	border-color: #5a6165;
+	background-color: transparent;
+}
+
+/* ---------- Champs de formulaire ---------- */
+QLineEdit,
+QPlainTextEdit,
+QTextEdit,
+QComboBox,
+QSpinBox,
+QDoubleSpinBox,
+QDateEdit,
+QDateTimeEdit {
+	background-color: #2a2e32;
+	color: #e6e9ea;
+	border: 1px solid #3d4247;
+	border-radius: 5px;
+	padding: 6px 8px;
+	selection-background-color: #0cc0df;
+	selection-color: #1c1f22;
+}
+QLineEdit:focus,
+QPlainTextEdit:focus,
+QTextEdit:focus,
+QComboBox:focus,
+QSpinBox:focus,
+QDoubleSpinBox:focus,
+QDateEdit:focus,
+QDateTimeEdit:focus {
+	border: 1px solid #0cc0df;
+}
+QLineEdit:disabled,
+QPlainTextEdit:disabled,
+QComboBox:disabled,
+QSpinBox:disabled,
+QDoubleSpinBox:disabled {
+	background-color: #232629;
+	color: #6b7176;
+}
+QComboBox::drop-down {
+	border: none;
+	width: 24px;
+}
+QComboBox QAbstractItemView {
+	background-color: #2a2e32;
+	color: #e6e9ea;
+	border: 1px solid #3d4247;
+	selection-background-color: #0cc0df;
+	selection-color: #1c1f22;
+	outline: none;
+}
+
+/* ---------- Cases à cocher / boutons radio ---------- */
+QCheckBox {
+	color: #e6e9ea;
+}
+QCheckBox::indicator,
+QRadioButton::indicator {
+	width: 16px;
+	height: 16px;
+	border: 1px solid #4a5055;
+	background-color: #2a2e32;
+}
+QCheckBox::indicator {
+	border-radius: 4px;
+}
+QRadioButton::indicator {
+	border-radius: 8px;
+}
+QCheckBox::indicator:checked,
+QRadioButton::indicator:checked {
+	background-color: #0cc0df;
+	border: 1px solid #0cc0df;
+}
+QCheckBox::indicator:hover,
+QRadioButton::indicator:hover {
+	border: 1px solid #0cc0df;
+}
+QRadioButton {
+	color: #e6e9ea;
+}
+
+/* ---------- Barre de progression ---------- */
+QProgressBar {
+	background-color: #2a2e32;
+	border: none;
+	border-radius: 6px;
+	height: 12px;
+	text-align: center;
+	color: #e6e9ea;
+}
+QProgressBar::chunk {
+	background-color: #0cc0df;
+	border-radius: 6px;
+}
+
+/* ---------- Tableaux ---------- */
+QTableView,
+QTableWidget {
+	background-color: #2a2e32;
+	alternate-background-color: #242729;
+	gridline-color: #3d4247;
+	border: 1px solid #3d4247;
+	border-radius: 6px;
+	color: #e6e9ea;
+	selection-background-color: #0cc0df;
+	selection-color: #1c1f22;
+}
+QHeaderView::section {
+	background-color: #0097b2;
+	color: white;
+	padding: 6px;
+	border: none;
+	font-weight: 600;
+}
+
+/* ---------- Boîte de groupe ---------- */
+QGroupBox {
+	border: 1px solid #3d4247;
+	border-radius: 8px;
+	margin-top: 14px;
+	padding-top: 12px;
+	font-weight: 600;
+	color: #4fd6ef;
+}
+QGroupBox::title {
+	subcontrol-origin: margin;
+	left: 12px;
+	padding: 0 6px;
+}
+
+/* ---------- Onglets ---------- */
+QTabWidget::pane {
+	border: 1px solid #3d4247;
+	border-radius: 6px;
+	background-color: #2a2e32;
+}
+QTabBar::tab {
+	background-color: #232629;
+	color: #e6e9ea;
+	padding: 8px 16px;
+	border-top-left-radius: 6px;
+	border-top-right-radius: 6px;
+	margin-right: 2px;
+}
+QTabBar::tab:selected {
+	background-color: #0097b2;
+	color: white;
+}
+
+/* ---------- Ascenseurs ---------- */
+QScrollBar:vertical {
+	background: transparent;
+	width: 10px;
+	margin: 0px;
+}
+QScrollBar::handle:vertical {
+	background: #4a5055;
+	border-radius: 5px;
+	min-height: 24px;
+}
+QScrollBar::handle:vertical:hover {
+	background: #0cc0df;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+	height: 0px;
+}
+QScrollBar:horizontal {
+	background: transparent;
+	height: 10px;
+	margin: 0px;
+}
+QScrollBar::handle:horizontal {
+	background: #4a5055;
+	border-radius: 5px;
+	min-width: 24px;
+}
+QScrollBar::handle:horizontal:hover {
+	background: #0cc0df;
+}
+QScrollBar::add-line:horizontal,
+QScrollBar::sub-line:horizontal {
+	width: 0px;
+}
+
+/* ---------- Infobulles ---------- */
+QToolTip {
+	background-color: #0a0b0c;
+	color: #e6e9ea;
+	border: 1px solid #3d4247;
+	padding: 4px 8px;
+	border-radius: 4px;
+}
