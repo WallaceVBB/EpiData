@@ -9,6 +9,7 @@ from PySide6.QtGui import QIcon, QPixmap, QTransform
 from PySide6.QtWidgets import QApplication
 
 from navigation.n_extracteur_factures import FactureNavigation
+from navigation.n_historique import HistoriqueNavigation
 from navigation.n_parametres import ParametresNavigation
 from navigation.n_traitement import TraitementNavigation
 from navigation.n_a_propos import ProposNavigation
@@ -63,18 +64,28 @@ class Application (QObject):
         # Chargement des pages
         self.load_pages()
 
+        self.historique_navigation = HistoriqueNavigation(
+            self.pages["historique"], self.show_page, self.pages
+        )
+
         # Configuration des pages
         self.traitement_navigation = TraitementNavigation(
             self.pages["traitement_produits"],
             self.show_page,
             self.pages,
-            data_service=self.data_service
+            data_service=self.data_service,
+            history_navigation=self.historique_navigation,
         )
         self.facture_navigation = FactureNavigation(
             self.pages["convertir_pdf"],
             self.show_page,
             self.pages,
-            data_service=self.data_service
+            data_service=self.data_service,
+            history_navigation=self.historique_navigation,
+        )
+        self.historique_navigation.connecter_navigations(
+            self.traitement_navigation,
+            self.facture_navigation,
         )
 
         # Configuration de la navigation
@@ -151,6 +162,7 @@ class Application (QObject):
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
         self.pages["convertisseur_pdf_chargement"] = self.load_gui("ConvertisseurPDF_chargement.ui")
         self.pages["convertisseur_pdf_resultats"] = self.load_gui("ConvertisseurPDF_resultats.ui")
+        self.pages["historique"] = self.load_gui("Historique_selecteur.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
         # Ajout de chaque page au QStackedWidget
@@ -160,6 +172,7 @@ class Application (QObject):
     def setup_navigation(self):
         # Connexion des boutons de navigation
         self.window.b_Accueil.clicked.connect(lambda: self.show_page("accueil"))
+        self.window.b_Historique.clicked.connect(self.historique_navigation.ouvrir_historique)
 
         self.window.b_Traiter_fichier.clicked.connect(lambda: self.show_page(self.derniere_page_traitement))
 

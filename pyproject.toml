@@ -58,4 +58,4 @@ line-length = 100
 exclude = [".qtcreator", "benchmark_out", "tesseract"]
 
 [tool.pyside6-project]
-files = ["gui/A_propos.ui", "gui/Accueil.ui", "gui/ConvertisseurPDF_chargement.ui", "gui/ConvertisseurPDF_resultats.ui", "gui/ConvertisseurPDF_selecteur.ui", "gui/Parametres.ui", "gui/Traitement_chargement.ui", "gui/Traitement_colonnes.ui", "gui/Traitement_resultats.ui", "gui/Traitement_selecteur.ui", "gui/mainwindow.ui"]
+files = ["gui/Historique_selecteur.ui", "gui/A_propos.ui", "gui/Accueil.ui", "gui/ConvertisseurPDF_chargement.ui", "gui/ConvertisseurPDF_resultats.ui", "gui/ConvertisseurPDF_selecteur.ui", "gui/Parametres.ui", "gui/Traitement_chargement.ui", "gui/Traitement_colonnes.ui", "gui/Traitement_resultats.ui", "gui/Traitement_selecteur.ui", "gui/mainwindow.ui"]

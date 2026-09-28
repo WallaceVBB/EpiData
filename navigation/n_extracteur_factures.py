@@ -58,14 +58,17 @@ class FactureWorker(QThread):
         return None
 
 class FactureNavigation:
-    def __init__(self, page_widget, show_page_callback, pages, data_service=None):
+    def __init__(self, page_widget, show_page_callback, pages, data_service=None, history_navigation=None):
         self.page = page_widget
         self.pages = pages
         self.show_page = show_page_callback
         self.data_service = data_service
+        self.history_navigation = history_navigation
         self.worker = None
         self._current_output_path = None
         self._current_results_df = None
+        self._current_source_path = None
+        self._historique_mode = False
         self._connect_buttons()
         self._configurer_redimensionnement()
 
@@ -101,6 +104,8 @@ class FactureNavigation:
             return
 
         self._current_results_df = None
+        self._current_source_path = pdf_path
+        self._historique_mode = False
         self._current_output_path = str(Path.home() / "facture_extraite.xlsx")
         self._show_loading_page()
 
@@ -120,9 +125,25 @@ class FactureNavigation:
 
         self._current_results_df = result_df
         self._current_output_path = output_path
+        if self.history_navigation is not None:
+            try:
+                self._current_output_path = self.history_navigation.enregistrer_conversion(
+                    output_path,
+                    self._current_source_path,
+                )
+            except Exception as exc:
+                QMessageBox.warning(self.page, "Historique", f"La conversion n'a pas pu être archivée : {exc}")
         self._populate_results_table(result_df)
         self._show_results_page()
         QMessageBox.information(self.page, "Conversion terminée", message)
+
+    def charger_historique(self, result_df, output_path):
+        self._current_results_df = result_df
+        self._current_output_path = output_path
+        self._current_source_path = None
+        self._historique_mode = True
+        self._populate_results_table(result_df)
+        self._show_results_page()
 
     def _populate_results_table(self, result_df):
         results_page = self.pages.get('convertisseur_pdf_resultats')
@@ -140,12 +161,39 @@ class FactureNavigation:
             items = []
             for value in row:
                 value_text = '' if pd.isna(value) else str(value)
-                items.append(QStandardItem(value_text))
+                item = QStandardItem(value_text)
+                item.setEditable(True)
+                items.append(item)
             model.appendRow(items)
 
+        model.itemChanged.connect(self._on_result_item_changed)
         results_page.Tableau_Resultats.setModel(model)
         results_page.Tableau_Resultats.setAlternatingRowColors(True)
+        results_page.Tableau_Resultats.setSortingEnabled(False)
         results_page.Tableau_Resultats.resizeColumnsToContents()
+
+    def _on_result_item_changed(self, item):
+        if self._current_results_df is None:
+            return
+
+        self._current_results_df.iat[item.row(), item.column()] = item.text()
+        try:
+            self._sauvegarder_resultats_excel()
+        except Exception as exc:
+            QMessageBox.warning(self.page, "Historique", f"La modification n'a pas pu être enregistrée : {exc}")
+
+    def _sauvegarder_resultats_excel(self):
+        if not self._current_output_path or self._current_results_df is None:
+            return
+
+        chemin = Path(self._current_output_path)
+        temporaire = chemin.with_name(f"{chemin.stem}.tmp{chemin.suffix}")
+        try:
+            self._current_results_df.to_excel(temporaire, sheet_name="Produits", index=False)
+            temporaire.replace(chemin)
+        except Exception:
+            temporaire.unlink(missing_ok=True)
+            raise
 
     def on_progress_update(self, value, message):
         if value is not None:
@@ -182,6 +230,11 @@ class FactureNavigation:
         results_page = self.pages.get('convertisseur_pdf_resultats')
         if not results_page:
             return
+        bouton_autre = getattr(results_page, 'b_Convertir_Autre_Facture', None)
+        if bouton_autre is not None:
+            bouton_autre.setText(
+                "Revenir à l'historique" if self._historique_mode else "Convertir autre fichier"
+            )
         self.show_page('convertisseur_pdf_resultats')
 
     def _configurer_redimensionnement(self):
@@ -221,8 +274,17 @@ class FactureNavigation:
             QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier Excel : {exc}")
 
     def on_autre_fichier(self):
+        if self._historique_mode:
+            if self.history_navigation is not None:
+                self.history_navigation.ouvrir_historique()
+            else:
+                self.show_page('historique')
+            return
+
         self._current_results_df = None
         self._current_output_path = None
+        self._current_source_path = None
+        self._historique_mode = False
         if self.worker and self.worker.isRunning():
             self.worker.quit()
             self.worker.wait(1000)
