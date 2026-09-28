@@ -145,6 +145,7 @@ class Application (QObject):
         # Chargement de chaque page
         self.pages["accueil"] = self.load_gui("Accueil.ui")
         self.pages["traitement_produits"] = self.load_gui("Traitement_selecteur.ui")
+        self.pages["traitement_colonnes"] = self.load_gui("Traitement_colonnes.ui")
         self.pages["traitement_chargement"] = self.load_gui("Traitement_chargement.ui")
         self.pages["traitement_resultats"] = self.load_gui("Traitement_resultats.ui")
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
@@ -246,7 +247,7 @@ class Application (QObject):
 
     def show_page(self, page_name):
         # Mémorise la dernière sous-page du groupe traitement  
-        if page_name in ("traitement_produits", "traitement_chargement", "traitement_resultats"):  
+        if page_name in ("traitement_produits", "traitement_colonnes", "traitement_chargement", "traitement_resultats"):
             self.derniere_page_traitement = page_name  
     
         if page_name in ("convertir_pdf","convertisseur_pdf_chargement","convertisseur_pdf_resultats"):
