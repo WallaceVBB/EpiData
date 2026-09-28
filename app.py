@@ -23,13 +23,13 @@ class Application (QObject):
         self.app = QApplication(sys.argv)
         self.app.setWindowIcon(QIcon(ressource_path(os.path.join("icons", "epidata_logo.ico"))))
 
+        # Copie les ressources avant de charger le thème et les interfaces utilisateur.
+        copier_fichier_ressource_vers_utilisateur()
+
         # Application du style global (couleurs du logo), partagé par toutes les pages
         self.settings = QSettings("EpiData", "EpiData")
         self.theme = self.settings.value("theme", "light")
         self.charger_style_global()
-
-        # Copie des ressources vers le dossier utilisateur lors de la première exécution
-        copier_fichier_ressource_vers_utilisateur()
 
         # Services applicatifs (persistance et données de référence)
         self.data_service = DataService(app=self)
