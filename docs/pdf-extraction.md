@@ -27,11 +27,11 @@ The interface uses three main UI states:
 
 The main extraction implementations are located in:
 
-- `extracteur_facture/extracteur_generique.py`
-- `extracteur_facture/extracteur_jardimed.py`
+- `src/epidata/factures/extracteurs/extracteur_generique.py`
+- `src/epidata/factures/extracteurs/extracteur_jardimed.py`
 
 The workflow is coordinated by:
 
-- `navigation/n_extracteur_factures.py`
+- `src/epidata/navigation/n_extracteur_factures.py`
 
 When adding support for a new supplier, prefer extending the existing extraction architecture rather than modifying the generic extractor in a supplier-specific way.

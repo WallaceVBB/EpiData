@@ -1,7 +1,7 @@
 ## Explication du fichier
 """Ce ficher fait le traitement des données importer (fichier CSV à traiter)
-Couche de traitement : elle orchestre la couche ML (gestion_ml.py) et la couche
-de persistance (services.py). Elle ne contient ni SQL brut ni code d'interface graphique.
+Couche de traitement : elle orchestre le ML (produits/ml.py) et la persistance
+(produits/donnees.py). Elle ne contient ni SQL brut ni code d'interface graphique.
 """
 
 ## Bibliothèques
@@ -10,9 +10,9 @@ import re
 
 import pandas as pd
 
-from gestion_ml import GestionML
-from services import DataService
-from utils import detecter_separateur_csv, nettoyer_texte, ressource_path
+from epidata.produits.ml import GestionML
+from epidata.produits.donnees import DataService
+from epidata.utils import detecter_separateur_csv, nettoyer_texte, ressource_path
 
 
 # Code
@@ -209,7 +209,7 @@ class ClassificateurProduits:
         return self.gestion_ml.predire_avec_methode_hybride(texte)
 
     def nettoyer_texte(self, texte):
-        """Nettoie et normalise le texte (implémentation unique dans utils.py)."""
+        """Nettoie et normalise le texte (implémentation unique dans epidata.utils)."""
         return nettoyer_texte(texte)
 
     def attribuer_aliment_et_variante(self, texte, basevariante=None):
@@ -281,7 +281,7 @@ class ClassificateurProduits:
                 if regex_origine.search(texte_lower):
                     return origine
         except Exception as e:
-            from utils import console
+            from epidata.utils import console
             console.print(f"[red]extraire_origine a échoué sur {texte!r}: {e}")
         return None
 
@@ -856,6 +856,6 @@ class ClassificateurProduits:
             # Mettre à jour le produit dans la base de données
             return self.data_service.mettre_a_jour_produit(produit_id, donnees_mise_a_jour)
         except Exception as e:
-            from utils import console
+            from epidata.utils import console
             console.print(f"[red]Erreur lors de l'application de la correction au produit {produit_id}: {e}")
             return False

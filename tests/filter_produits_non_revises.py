@@ -57,15 +57,10 @@ from rich.console import Console
 from sklearn.metrics.pairwise import cosine_similarity
 
 # Permet d'importer les modules du projet
-sys.path.insert(
-    0,
-    os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "..")
-    )
-)
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from gestion_ml import GestionML
-from utils import nettoyer_texte
+from epidata.produits.ml import GestionML
+from epidata.utils import nettoyer_texte
 
 console = Console()
 

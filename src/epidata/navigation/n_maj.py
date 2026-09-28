@@ -1,7 +1,7 @@
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtWidgets import QMessageBox, QProgressDialog
 
-from utils import _est_empaquete, console
+from epidata.utils import _est_empaquete, console
 
 
 class MajNavigation(QObject):
@@ -19,7 +19,7 @@ class MajNavigation(QObject):
         self._chemin_installateur = None
 
     def on_maj_logiciel(self, au_demarrage=False):
-        from maj_logiciel import MajWorker
+        from epidata.maj_logiciel import MajWorker
 
         if self._mise_a_jour_en_cours:
             return
@@ -110,7 +110,7 @@ class MajNavigation(QObject):
         if chemin_installateur is None:
             return
         try:
-            from maj_logiciel import MajGestion
+            from epidata.maj_logiciel import MajGestion
             MajGestion.appliquer_maj(chemin_installateur)
         except Exception as e:
             QMessageBox.critical(self._parent_widget, "Erreur", f"Impossible de lancer la mise à jour : {e}")

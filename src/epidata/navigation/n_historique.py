@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from utils import USER_APP_DIR, ressource_path
+from epidata.utils import USER_APP_DIR, ressource_path
 
 
 class HistoriqueNavigation:

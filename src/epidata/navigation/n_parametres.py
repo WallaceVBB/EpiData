@@ -7,7 +7,7 @@ from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog
 
-from utils import console, ressource_path
+from epidata.utils import console, ressource_path
 
 
 class TraitementModelesWorker(QThread):
@@ -23,8 +23,8 @@ class TraitementModelesWorker(QThread):
 
     def run(self):
         """Exécute la récréation des modèles dans un thread séparé."""
-        from gestion_ml import GestionML
-        from services import DataService
+        from epidata.produits.ml import GestionML
+        from epidata.produits.donnees import DataService
 
 
         try:

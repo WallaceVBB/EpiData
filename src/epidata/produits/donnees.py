@@ -11,7 +11,7 @@ from types import SimpleNamespace
 
 import pandas as pd
 
-from utils import BD_ENTRAINEMENT, BD_PT, console, ressource_path
+from epidata.utils import BD_ENTRAINEMENT, BD_PT, console, ressource_path
 
 # Colonnes de la table produits, dans l'ordre du schéma défini par creer_bd_pt.
 COLONNES_PRODUITS = [
@@ -55,7 +55,7 @@ class DataService:
 
     def creer_dossiers(self):
         """Crée les dossiers nécessaires de l'application."""
-        from utils import MODELES_DIR, PARAMETRES_DIR
+        from epidata.utils import MODELES_DIR, PARAMETRES_DIR
 
         os.makedirs(MODELES_DIR, exist_ok=True)
         os.makedirs(PARAMETRES_DIR, exist_ok=True)

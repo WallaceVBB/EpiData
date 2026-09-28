@@ -10,8 +10,8 @@ from PySide6.QtCore import QSortFilterProxyModel, Qt, QThread, Signal
 from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QSizePolicy, QStyledItemDelegate
 
-from services import DataService
-from utils import BD_PT, console, detecter_separateur_csv
+from epidata.produits.donnees import DataService
+from epidata.utils import BD_PT, console, detecter_separateur_csv
 
 # Rôle personnalisé utilisé pour retenir la dernière valeur "connue" d'une cellule,
 # afin de pouvoir détecter une modification réelle.
@@ -233,7 +233,7 @@ class TraitementWorker(QThread):
         self.column_mapping = column_mapping
 
     def run(self):
-        from data_processing import ClassificateurProduits
+        from epidata.produits.traitement import ClassificateurProduits
         
         result = {'success': True, 'message': 'Traitement terminé avec succès.'}
         imported_rows = None
@@ -358,7 +358,7 @@ class TraitementNavigation:
                 # Charger depuis categories.csv
                 import os
 
-                from utils import ressource_path
+                from epidata.utils import ressource_path
                 csv_categories = ressource_path(os.path.join("parametres", "categories.csv"))
                 if os.path.exists(csv_categories):
                     df_categories = pd.read_csv(csv_categories)

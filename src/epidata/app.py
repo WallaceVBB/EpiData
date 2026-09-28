@@ -8,14 +8,14 @@ from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve, QSettings
 from PySide6.QtGui import QIcon, QPixmap, QTransform
 from PySide6.QtWidgets import QApplication
 
-from navigation.n_extracteur_factures import FactureNavigation
-from navigation.n_historique import HistoriqueNavigation
-from navigation.n_parametres import ParametresNavigation
-from navigation.n_traitement import TraitementNavigation
-from navigation.n_a_propos import ProposNavigation
-from navigation.n_maj import MajNavigation
-from services import DataService
-from utils import copier_fichier_ressource_vers_utilisateur, ressource_path, GUI_DIR
+from epidata.navigation.n_extracteur_factures import FactureNavigation
+from epidata.navigation.n_historique import HistoriqueNavigation
+from epidata.navigation.n_parametres import ParametresNavigation
+from epidata.navigation.n_traitement import TraitementNavigation
+from epidata.navigation.n_a_propos import ProposNavigation
+from epidata.navigation.n_maj import MajNavigation
+from epidata.produits.donnees import DataService
+from epidata.utils import copier_fichier_ressource_vers_utilisateur, ressource_path, GUI_DIR
 
 
 class Application (QObject):
@@ -135,7 +135,7 @@ class Application (QObject):
         # Création du chargeur Qt
         from PySide6.QtUiTools import QUiLoader
 
-        from utils import GUI_DIR
+        from epidata.utils import GUI_DIR
 
         loader = QUiLoader()
 

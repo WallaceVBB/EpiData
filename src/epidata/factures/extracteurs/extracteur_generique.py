@@ -8,7 +8,7 @@ from statistics import median
 import pandas as pd
 import pytesseract
 
-from utils import TESSDATA_DIR, TESSERACT_EXE
+from epidata.utils import TESSDATA_DIR, TESSERACT_EXE
 
 # --- Paramètres OCR ---------------------------------------------------------
 

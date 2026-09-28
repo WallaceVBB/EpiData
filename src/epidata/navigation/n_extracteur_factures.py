@@ -50,10 +50,10 @@ class FactureWorker(QThread):
 
     def _load_extractor_module(self, extractor_name):
         if extractor_name == "generique":
-            from extracteur_facture import extracteur_generique
+            from epidata.factures.extracteurs import extracteur_generique
             return extracteur_generique
         if extractor_name == "jardimed":
-            from extracteur_facture import extracteur_jardimed
+            from epidata.factures.extracteurs import extracteur_jardimed
             return extracteur_jardimed
         return None
 

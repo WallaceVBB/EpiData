@@ -5,10 +5,10 @@ block_cipher = None
 
 hidden = []  
 datas = [  
-    ('gui', 'gui'),  
-    ('parametres', 'parametres'),
+    ('src/epidata/resources/gui', 'epidata/resources/gui'),
+    ('src/epidata/resources/parametres', 'epidata/resources/parametres'),
     ("tesseract", "tesseract"),
-    ('icons', 'icons'),
+    ('src/epidata/resources/icons', 'epidata/resources/icons'),
 ]  
   
 # scikit-learn + scipy (dépendance) : sous-modules chargés dynamiquement  
@@ -30,7 +30,7 @@ datas += collect_data_files('sklearn')
   
 a = Analysis(  
     ['main.py'],  
-    pathex=[],  
+    pathex=['src'],
     binaries=[],  
     datas=datas,  
     hiddenimports=hidden,  
@@ -47,7 +47,7 @@ exe = EXE(
     exclude_binaries=True,  
     name='EpiData',  
     console=False,  
-    icon='icons/epidata_logo.ico', 
+    icon='src/epidata/resources/icons/epidata_logo.ico',
 )  
   
 coll = COLLECT(  

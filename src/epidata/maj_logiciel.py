@@ -6,7 +6,7 @@ import subprocess
 
 from PySide6.QtCore import QObject
 
-from utils import USER_APP_DIR, VERSION, console
+from epidata.utils import USER_APP_DIR, VERSION, console
 
 REPO = "WallaceVBB/EpiData"  
 API_LATEST = f"https://api.github.com/repos/{REPO}/releases/latest"  

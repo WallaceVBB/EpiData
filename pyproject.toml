@@ -30,27 +30,24 @@ dev = [
 ]
 
 [project.scripts]
-epidata = "main:main"
-
-[tool.setuptools]
-py-modules = [
-	"app",
-	"data_processing",
-	"gestion_ml",
-	"main",
-	"maj_logiciel",
-	"services",
-	"utils",
-]
+epidata = "epidata.main:main"
 
 [tool.setuptools.packages.find]
-where = ["."]
-include = ["navigation*", "extracteur_facture*"]
-exclude = ["tests*", ".qtcreator*", "benchmark_out*"]
+where = ["src"]
+include = ["epidata*"]
+
+[tool.setuptools.package-data]
+epidata = [
+	"resources/gui/*.ui",
+	"resources/gui/*.qss",
+	"resources/icons/*",
+	"resources/parametres/*.csv",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py", "*_test.py"]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py312"
@@ -58,4 +55,4 @@ line-length = 100
 exclude = [".qtcreator", "benchmark_out", "tesseract"]
 
 [tool.pyside6-project]
-files = ["gui/Historique_selecteur.ui", "gui/A_propos.ui", "gui/Accueil.ui", "gui/ConvertisseurPDF_chargement.ui", "gui/ConvertisseurPDF_resultats.ui", "gui/ConvertisseurPDF_selecteur.ui", "gui/Parametres.ui", "gui/Traitement_chargement.ui", "gui/Traitement_colonnes.ui", "gui/Traitement_resultats.ui", "gui/Traitement_selecteur.ui", "gui/mainwindow.ui"]
+files = ["src/epidata/resources/gui/Historique_selecteur.ui", "src/epidata/resources/gui/A_propos.ui", "src/epidata/resources/gui/Accueil.ui", "src/epidata/resources/gui/ConvertisseurPDF_chargement.ui", "src/epidata/resources/gui/ConvertisseurPDF_resultats.ui", "src/epidata/resources/gui/ConvertisseurPDF_selecteur.ui", "src/epidata/resources/gui/Parametres.ui", "src/epidata/resources/gui/Traitement_chargement.ui", "src/epidata/resources/gui/Traitement_colonnes.ui", "src/epidata/resources/gui/Traitement_resultats.ui", "src/epidata/resources/gui/Traitement_selecteur.ui", "src/epidata/resources/gui/mainwindow.ui"]
