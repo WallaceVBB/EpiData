@@ -11,7 +11,6 @@ from PySide6.QtWidgets import QApplication
 from navigation.n_extracteur_factures import FactureNavigation
 from navigation.n_parametres import ParametresNavigation
 from navigation.n_traitement import TraitementNavigation
-from navigation.n_credits import CreditsNavigation
 from navigation.n_a_propos import ProposNavigation
 from navigation.n_maj import MajNavigation
 from services import DataService
@@ -49,8 +48,6 @@ class Application (QObject):
         self.parametres_navigation = ParametresNavigation(data_service=self.data_service,load_gui=self.load_gui)
 
         self.maj_navigation = MajNavigation(parent_widget=self.window)
-
-        self.credits_navigation = CreditsNavigation(load_gui=self.load_gui)
 
         self.propos_navigation = ProposNavigation(load_gui=self.load_gui)
 
@@ -237,9 +234,6 @@ class Application (QObject):
 
     def ouvrir_parametres(self):
         self.show_page("parametres")
-
-    def ouvrir_credits(self):
-        self.show_page("credits")
 
     def ouvrir_propos(self):
         self.show_page("Propos")

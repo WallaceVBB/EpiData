@@ -18,21 +18,12 @@ PROPOS_TEXT = f"""
     </p>
 
     <h2 style="margin-bottom:12px;">
-            Qu'est-ce qu'EpiData ?
-    </h2>
-
-    <p>
-        Les données utilisées dans la restauration collective et dans les structures alimentaires peuvent provenir de nombreuses sources et être présentées sous des formats différents. Leur traitement manuel peut donc être long, répétitif et source d'erreurs.<br>
-        EpiData a été développé pour répondre à ce problème en automatisant une partie de ces opérations, tout en conservant la possibilité de contrôler et de corriger les résultats.
-    </p>
-
-    <h2 style="margin-bottom:12px;">
            Fonctionnement
     </h2>
 
     <p>
-        EpiData combine plusieurs technologies pour automatiser le traitement des données :<br>
-
+        EpiData combine plusieurs technologies pour automatiser le traitement des données :
+        
         <ul>
         <li>traitement et normalisation des données ;</li>
         <li>outils permettant de vérifier et de corriger les résultats obtenus.</li>
@@ -40,7 +31,6 @@ PROPOS_TEXT = f"""
         </ul>
 
         Les résultats produits automatiquement restent contrôlables par l'utilisateur afin de favoriser la qualité et la fiabilité des données.
-
     </p>
 
     <h2 style="margin-bottom:12px;">
@@ -48,9 +38,25 @@ PROPOS_TEXT = f"""
     </h2>
 
     <p>
-        EpiData est un projet en évolution continue. Les fonctionnalités, les modèles et les méthodes de traitement sont régulièrement améliorés afin d'augmenter la fiabilité des résultats et de répondre aux besoins rencontrés sur le terrain.<br>
+        EpiData est un projet en évolution continue. Les fonctionnalités, les modèles et les méthodes de traitement sont régulièrement améliorés afin d'augmenter la fiabilité des résultats et de répondre aux besoins rencontrés sur le terrain.
+    </p>
 
-        Le logiciel est développé avec Python et s'appuie notamment sur l'écosystème Qt pour son interface graphique ainsi que sur différentes bibliothèques spécialisées dans le traitement des données et le machine learning.
+    <h2 style="margin-bottom:12px;">
+            Crédits
+    </h2>
+    
+    <p>
+        <b>Développement et maintenance</b><br>
+        Wallace Victor Bastos Barbosa
+    </p>
+
+    <p>
+        <b>Soutien au développement</b><br>
+        Groupement des Épiceries Sociales de Bourgogne-Franche-Comté
+        (GESBFC)<br>
+        <span style="color:#666;">
+            Soutien au développement d'EpiData dans le cadre professionnel.
+        </span>
     </p>
 
     <h2 style="margin-bottom:12px;">
