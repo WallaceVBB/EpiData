@@ -11,7 +11,7 @@ from PySide6.QtGui import QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QSizePolicy, QStyledItemDelegate
 
 from services import DataService
-from utils import BD_PT, console
+from utils import BD_PT, console, detecter_separateur_csv
 
 # Rôle personnalisé utilisé pour retenir la dernière valeur "connue" d'une cellule,
 # afin de pouvoir détecter une modification réelle.
@@ -228,11 +228,12 @@ class TraitementWorker(QThread):
     finished = Signal(bool, str, object)
     progress_updated = Signal(int, str)
 
-    def __init__(self, file_path, bd_pt, data_service=None, parent=None):
+    def __init__(self, file_path, bd_pt, data_service=None, column_mapping=None, parent=None):
         super().__init__(parent)
         self.file_path = file_path
         self.bd_pt = bd_pt
         self.data_service = data_service
+        self.column_mapping = column_mapping
 
     def run(self):
         from data_processing import ClassificateurProduits
@@ -248,7 +249,11 @@ class TraitementWorker(QThread):
             self.data_service = DataService(app=self, bd_pt=self.bd_pt)
             classifier = ClassificateurProduits(data_service=self.data_service)
             self.progress_updated.emit(5, "Création des modèles...")
-            imported_df = classifier.classifier_produits(self.file_path, progress_callback=progress_callback)
+            imported_df = classifier.classifier_produits(
+                self.file_path,
+                progress_callback=progress_callback,
+                column_mapping=self.column_mapping,
+            )
             if imported_df is None:
                 raise RuntimeError("Le traitement du fichier a échoué")
             imported_rows = imported_df
@@ -287,6 +292,7 @@ class TraitementNavigation:
         # Pagination du tableau de résultats
         self._page_courante = 0
         self._nb_pages = 0
+        self._fichier_choisi = None
 
         self._connect_buttons()
         self._connect_progress_buttons()
@@ -298,6 +304,15 @@ class TraitementNavigation:
             self.page.b_Traitement_Stardard.clicked.connect(self.on_traitement_standard)
         if hasattr(self.page, 'b_Traitement_Choix'):
             self.page.b_Traitement_Choix.clicked.connect(self.on_traitement_choix)
+
+        page_colonnes = self.pages.get('traitement_colonnes')
+        if page_colonnes:
+            if hasattr(page_colonnes, 'b_Choisir_Fichier'):
+                page_colonnes.b_Choisir_Fichier.clicked.connect(self.on_choisir_fichier_colonnes)
+            if hasattr(page_colonnes, 'b_Lancer_Traitement'):
+                page_colonnes.b_Lancer_Traitement.clicked.connect(self.on_lancer_traitement_choix)
+            if hasattr(page_colonnes, 'b_Retour'):
+                page_colonnes.b_Retour.clicked.connect(lambda: self.show_page('traitement_produits'))
 
     def _connect_progress_buttons(self):
         loading_page = self.pages.get('traitement_chargement')
@@ -363,6 +378,10 @@ class TraitementNavigation:
         if not file_path:
             return
 
+        self._lancer_traitement(file_path)
+
+    def _lancer_traitement(self, file_path, column_mapping=None):
+
         self.current_results_df = None
         self._current_stage = 'creation_modeles'
         self._last_progress_value = 0
@@ -373,17 +392,98 @@ class TraitementNavigation:
         if self.data_service is None:
             self.data_service = self._obtenir_data_service()
 
-        self.worker = TraitementWorker(file_path, BD_PT, data_service=self.data_service)
+        self.worker = TraitementWorker(
+            file_path, BD_PT, data_service=self.data_service, column_mapping=column_mapping
+        )
         self.worker.finished.connect(self.on_finished)
         self.worker.progress_updated.connect(self.on_progress_update)
         self.worker.start()
 
     def on_traitement_choix(self):
-        QMessageBox.information(
-            self.page,
-            "Traitement choix",
-            "Le traitement en choisissant les colonnes n'est pas encore pris en charge."
+        self._fichier_choisi = None
+        page_colonnes = self.pages.get('traitement_colonnes')
+        if page_colonnes is None:
+            QMessageBox.critical(self.page, "Erreur", "La page de sélection des colonnes est indisponible.")
+            return
+
+        if hasattr(page_colonnes, 'label_Fichier'):
+            page_colonnes.label_Fichier.setText("Aucun fichier sélectionné")
+        for nom in ('cb_designation', 'cb_siret', 'cb_fournisseur'):
+            combo = getattr(page_colonnes, nom, None)
+            if combo is not None:
+                combo.clear()
+                combo.addItem("Choisir un fichier", None)
+        if hasattr(page_colonnes, 'b_Lancer_Traitement'):
+            page_colonnes.b_Lancer_Traitement.setEnabled(False)
+        self.show_page('traitement_colonnes')
+
+    def on_choisir_fichier_colonnes(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self.pages.get('traitement_colonnes', self.page),
+            "Sélectionner un fichier CSV ou Excel",
+            str(Path.home()),
+            "Fichiers CSV ou Excel (*.csv *.xls *.xlsx);;Tous les fichiers (*)",
         )
+        if not file_path:
+            return
+
+        try:
+            suffix = Path(file_path).suffix.lower()
+            if suffix == '.csv':
+                separateur = detecter_separateur_csv(file_path)
+                colonnes = pd.read_csv(file_path, sep=separateur, nrows=0).columns
+            elif suffix in ('.xls', '.xlsx'):
+                colonnes = pd.read_excel(file_path, nrows=0).columns
+            else:
+                raise ValueError("Le fichier doit être au format CSV ou Excel (.csv, .xls, .xlsx).")
+        except Exception as exc:
+            QMessageBox.critical(self.pages.get('traitement_colonnes', self.page), "Erreur", str(exc))
+            return
+
+        self._fichier_choisi = file_path
+        page_colonnes = self.pages['traitement_colonnes']
+        if hasattr(page_colonnes, 'label_Fichier'):
+            page_colonnes.label_Fichier.setText(Path(file_path).name)
+
+        colonnes_normalisees = [str(colonne).lower() for colonne in colonnes]
+        for nom, obligatoire in (
+            ('cb_designation', True),
+            ('cb_siret', False),
+            ('cb_fournisseur', False),
+        ):
+            combo = getattr(page_colonnes, nom, None)
+            if combo is None:
+                continue
+            combo.clear()
+            combo.addItem("Choisir une colonne..." if obligatoire else "Aucune colonne", None)
+            for colonne in colonnes_normalisees:
+                combo.addItem(colonne, colonne)
+
+            nom_canonique = nom.removeprefix('cb_')
+            index = combo.findData(nom_canonique)
+            if index >= 0:
+                combo.setCurrentIndex(index)
+
+        if hasattr(page_colonnes, 'b_Lancer_Traitement'):
+            page_colonnes.b_Lancer_Traitement.setEnabled(True)
+
+    def on_lancer_traitement_choix(self):
+        page_colonnes = self.pages.get('traitement_colonnes')
+        if not self._fichier_choisi or page_colonnes is None:
+            QMessageBox.warning(self.page, "Fichier manquant", "Sélectionnez d'abord un fichier à traiter.")
+            return
+
+        combo_designation = getattr(page_colonnes, 'cb_designation', None)
+        designation = combo_designation.currentData() if combo_designation is not None else None
+        if not designation:
+            QMessageBox.warning(page_colonnes, "Désignation manquante", "La colonne Désignation est obligatoire.")
+            return
+
+        column_mapping = {'designation': designation}
+        for champ in ('siret', 'fournisseur'):
+            combo = getattr(page_colonnes, f'cb_{champ}', None)
+            column_mapping[champ] = combo.currentData() if combo is not None else None
+        self._lancer_traitement(self._fichier_choisi, column_mapping)
 
     def on_cancel_loading(self):
         # NOTE : terminate() est un arrêt forcé et brutal du thread ; il peut laisser

@@ -12,7 +12,7 @@ import pandas as pd
 
 from gestion_ml import GestionML
 from services import DataService
-from utils import nettoyer_texte, ressource_path
+from utils import detecter_separateur_csv, nettoyer_texte, ressource_path
 
 
 # Code
@@ -508,7 +508,28 @@ class ClassificateurProduits:
             # Multiplie le poids converti en Kg par le packaging
         return poids_kg * packaging
 
-    def classifier_produits(self, fichier_entree, progress_callback=None):
+    @staticmethod
+    def _appliquer_correspondance_colonnes(df, column_mapping):
+        """Copie les colonnes sélectionnées vers les noms attendus par le traitement."""
+        if column_mapping is None:
+            return df
+
+        colonnes_source = df.copy()
+        for champ in ('designation', 'siret', 'fournisseur'):
+            source = column_mapping.get(champ)
+            if source is None:
+                if champ == 'designation':
+                    raise ValueError("La colonne Désignation est obligatoire.")
+                df[champ] = None
+                continue
+
+            source = str(source).strip().lower()
+            if source not in colonnes_source.columns:
+                raise ValueError(f"La colonne sélectionnée pour '{champ}' est absente du fichier.")
+            df[champ] = colonnes_source[source]
+        return df
+
+    def classifier_produits(self, fichier_entree, progress_callback=None, column_mapping=None):
         """Classifie les produits à partir d'un fichier CSV avec colonnes: designation (obligatoire), code_produit (optionnel), siret (optionnel)"""
         self.preparer_modeles()
 
@@ -520,7 +541,8 @@ class ClassificateurProduits:
             _, ext = os.path.splitext(fichier_entree)
             ext = ext.lower()
             if ext == '.csv':
-                df = pd.read_csv(fichier_entree, dtype=str)
+                separateur = detecter_separateur_csv(fichier_entree)
+                df = pd.read_csv(fichier_entree, sep=separateur, dtype=str)
             elif ext in ['.xls', '.xlsx']:
                 df = pd.read_excel(fichier_entree, dtype=str)
             else:
@@ -529,6 +551,7 @@ class ClassificateurProduits:
 
             # Normaliser les noms de colonnes (ex: 'DESIGNATION' → 'designation')
             df.columns = df.columns.str.lower()
+            df = self._appliquer_correspondance_colonnes(df, column_mapping)
 
             # Flexibilisation de la manière d'écrire les colonnes
             alias_code_produit = ['code produit', 'code_produit', 'codeproduit', 'code', 'code produi',
@@ -568,6 +591,7 @@ class ClassificateurProduits:
                 texte_brut = produit.get('designation', '').strip()
                 code_produit = produit.get('code_produit') if has_code_produit else None
                 siret = produit.get('siret')
+                fournisseur_entree = produit.get('fournisseur') if column_mapping is not None else None
 
                 resultat = {}
                 # Cherche le produit dans la base_connaissance (d'abord par le code_produit et ensuite par le texte_brut)
@@ -651,7 +675,11 @@ class ClassificateurProduits:
                         'texte_propre': texte_propre,
                         'code_produit': code_produit,
                         'siret': siret,
-                        'fournisseur': caracteristiques['fournisseur'],
+                        'fournisseur': (
+                            fournisseur_entree
+                            if pd.notna(fournisseur_entree) and str(fournisseur_entree).strip()
+                            else caracteristiques['fournisseur']
+                        ),
                         'base_variante': base_variante,
                         'aliment': aliment,
                         'variante': variante,

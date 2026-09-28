@@ -4,6 +4,7 @@ ainsi que quelques utilitaires texte partagés par les autres couches.
 """
 
 ### Bibliothèque
+import csv
 import os
 import platform
 import re
@@ -83,6 +84,16 @@ def ressource_path (relative_path):
     else: # si le programme est lancé en script (.py)
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
+
+def detecter_separateur_csv(chemin_fichier):
+    """Détecte le séparateur d'un CSV courant (virgule, point-virgule, tabulation ou pipe)."""
+    with open(chemin_fichier, encoding="utf-8-sig", newline="") as fichier:
+        extrait = fichier.read(8192)
+
+    try:
+        return csv.Sniffer().sniff(extrait, delimiters=",;\t|").delimiter
+    except csv.Error:
+        return ","
 
 def assurer_fichier_utilisateur(nom_fichier, sous_dossier=None, forcer=False):  
     """Assure que le fichier spécifié existe dans le directoire utilisateur.
