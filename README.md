@@ -106,10 +106,8 @@ Pour contribuer, vous pouvez ouvrir une **Issue** ou proposer une **Pull Request
 
 Les prochaines évolutions envisagées comprennent notamment :
 
-* [ ] Développer une méthode plus adaptable de traitement de fichiers désignation : Permettre à l'utilisateur de choisir les colonnes correspondantes aux données à traiter.
 * [ ] Enrichir les données d'entraînement : Intégrer davantage d'exemples produits pour optimiser la précision des modèles de Machine Learning.
 * [ ] Refondre la page de révision : Améliorer l'ergonomie et la clarté de la visualisation des résultats.
-* [ ] Implémenter un historique des traitements : Permettre le suivi et la reconversion des fichiers de désignation et PDF déjà traités.
 * [ ] Développer le partage de datasets : Faciliter la mise en ligne et la collaboration sur les bases de données d'entraînement.
 * [ ] Créer un hub de modèles ML : Mettre en place un système de partage et de versionning des modèles entraînés.
 * [ ] Assurer la compatibilité macOS : Déployer les scripts d'installation et de mise à jour native pour MacOS.
