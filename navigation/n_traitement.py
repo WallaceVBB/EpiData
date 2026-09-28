@@ -77,9 +77,6 @@ class TableModelEditablePersonnalise(QStandardItemModel):
                 value = row.get(colonne, '')
 
                 if colonne == 'est_corrige':
-                    # Pour est_corrige, créer un item avec checkbox.
-                    # (Bug corrigé : l'ancien code appelait deux fois setCheckable(),
-                    # ce qui désactivait la case au lieu de fixer son état initial.)
                     valeur_bool = bool(value)
                     item = QStandardItem()
                     item.setCheckable(True)
@@ -269,11 +266,12 @@ class TraitementWorker(QThread):
 class TraitementNavigation:
     """Navigation et actions de la page de traitement de fichier."""
 
-    def __init__(self, page_widget, show_page_callback, pages, data_service=None):
+    def __init__(self, page_widget, show_page_callback, pages, data_service=None, history_navigation=None):
         self.page = page_widget
         self.pages = pages
         self.show_page = show_page_callback
         self.data_service = data_service
+        self.history_navigation = history_navigation
         self.worker = None
         self._progress_timer = None
         self.current_results_df = None
@@ -293,6 +291,8 @@ class TraitementNavigation:
         self._page_courante = 0
         self._nb_pages = 0
         self._fichier_choisi = None
+        self._historique_mode = False
+        self._chemin_historique = None
 
         self._connect_buttons()
         self._connect_progress_buttons()
@@ -383,6 +383,9 @@ class TraitementNavigation:
     def _lancer_traitement(self, file_path, column_mapping=None):
 
         self.current_results_df = None
+        self._fichier_choisi = file_path
+        self._historique_mode = False
+        self._chemin_historique = None
         self._current_stage = 'creation_modeles'
         self._last_progress_value = 0
         self._last_progress_message = ''
@@ -516,11 +519,21 @@ class TraitementNavigation:
             return
 
         self.current_results_df = imported_rows if imported_rows is not None else pd.DataFrame()
+        if self.history_navigation is not None:
+            try:
+                self.history_navigation.enregistrer_traitement(
+                    self.current_results_df,
+                    self._fichier_choisi,
+                )
+            except Exception as exc:
+                QMessageBox.warning(self.page, "Historique", f"Le résultat n'a pas pu être archivé : {exc}")
         self._show_results_page()
 
         QMessageBox.information(self.page, "Traitement terminé", message)
 
     def on_supprimer_resultats(self):
+        if self._historique_mode:
+            return
         if self.current_results_df is None or self.current_results_df.empty:
             QMessageBox.information(self.page, "Suppression", "Aucune donnée à supprimer.")
             return
@@ -600,9 +613,17 @@ class TraitementNavigation:
         self._page_courante = 0
         self._populate_results_table(self.current_results_df)
 
+        bouton_autre = getattr(results_page, 'b_Autre_Fichier', None)
+        if bouton_autre is not None:
+            bouton_autre.setText(
+                "Revenir à l'historique" if self._historique_mode else "Traiter autre fichier"
+            )
+
         if hasattr(results_page, 'b_Supprimer_Resultats'):
             results_page.b_Supprimer_Resultats.setEnabled(
-                not self.current_results_df.empty if self.current_results_df is not None else False
+                not self._historique_mode and not self.current_results_df.empty
+                if self.current_results_df is not None
+                else False
             )
 
     def _populate_results_table(self, df):
@@ -921,6 +942,18 @@ class TraitementNavigation:
                             except (ValueError, TypeError):  
                                 cast_val = val  
                             self.current_results_df.loc[index_ligne, col] = cast_val
+                if self._historique_mode and self._chemin_historique and self.history_navigation:
+                    try:
+                        self.history_navigation.mettre_a_jour_traitement(
+                            self._chemin_historique,
+                            self.current_results_df,
+                        )
+                    except Exception as exc:
+                        QMessageBox.warning(
+                            self.page,
+                            "Historique",
+                            f"La correction a été enregistrée en base, mais pas dans l'historique : {exc}",
+                        )
             else:
                 QMessageBox.warning(self.page, "Erreur", f"Impossible de mettre à jour le produit {produit_id}")
         except Exception as e:
@@ -974,5 +1007,20 @@ class TraitementNavigation:
             QMessageBox.critical(self.page, "Erreur", f"Impossible d'enregistrer le fichier CSV : {exc}")
 
     def on_autre_fichier(self):
+        if self._historique_mode:
+            if self.history_navigation is not None:
+                self.history_navigation.ouvrir_historique()
+            else:
+                self.show_page('historique')
+            return
+
         self.current_results_df = None
+        self._historique_mode = False
+        self._chemin_historique = None
         self.show_page('traitement_produits')
+
+    def charger_historique(self, dataframe, chemin_historique):
+        self.current_results_df = dataframe
+        self._historique_mode = True
+        self._chemin_historique = chemin_historique
+        self._show_results_page()
