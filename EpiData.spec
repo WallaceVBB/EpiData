@@ -8,7 +8,7 @@ datas = [
     ('gui', 'gui'),  
     ('parametres', 'parametres'),
     ("tesseract", "tesseract"),
-    ('icons/epidata_logo.ico', 'icons'),
+    ('icons', 'icons'),
 ]  
   
 # scikit-learn + scipy (dépendance) : sous-modules chargés dynamiquement  

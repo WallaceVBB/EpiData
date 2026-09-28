@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>756</width>
-    <height>430</height>
+    <width>960</width>
+    <height>540</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -56,47 +56,256 @@
    <property name="autoFillBackground">
     <bool>true</bool>
    </property>
-   <layout class="QVBoxLayout" name="verticalLayout">
+   <layout class="QHBoxLayout" name="mainLayout">
+    <property name="spacing">
+     <number>0</number>
+    </property>
+    <property name="leftMargin">
+     <number>0</number>
+    </property>
+    <property name="topMargin">
+     <number>0</number>
+    </property>
+    <property name="rightMargin">
+     <number>0</number>
+    </property>
+    <property name="bottomMargin">
+     <number>0</number>
+    </property>
     <item>
-     <layout class="QHBoxLayout" name="horizontalLayout">
-      <item>
-       <widget class="QPushButton" name="b_Accueil">
-        <property name="text">
-         <string>Accueil</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="b_Traiter_fichier">
-        <property name="text">
-         <string>Traitement de produits</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="b_Convertir_PDF">
-        <property name="text">
-         <string>Facture PDF</string>
-        </property>
-       </widget>
-      </item>
-      <item>
-       <widget class="QPushButton" name="pushButton_3">
-        <property name="enabled">
-         <bool>false</bool>
-        </property>
-        <property name="text">
-         <string>Historique</string>
-        </property>
-       </widget>
-      </item>
-     </layout>
-    </item>
-    <item>
-     <widget class="Line" name="line">
-      <property name="orientation">
-       <enum>Qt::Orientation::Horizontal</enum>
+     <widget class="QFrame" name="frame_sidebar">
+      <property name="minimumSize">
+       <size>
+        <width>230</width>
+        <height>0</height>
+       </size>
       </property>
+      <property name="maximumSize">
+       <size>
+        <width>230</width>
+        <height>16777215</height>
+       </size>
+      </property>
+      <property name="frameShape">
+       <enum>QFrame::Shape::NoFrame</enum>
+      </property>
+      <property name="frameShadow">
+       <enum>QFrame::Shadow::Raised</enum>
+      </property>
+      <layout class="QVBoxLayout" name="verticalLayout_sidebar">
+       <property name="spacing">
+        <number>4</number>
+       </property>
+       <property name="leftMargin">
+        <number>0</number>
+       </property>
+       <property name="topMargin">
+        <number>8</number>
+       </property>
+       <property name="rightMargin">
+        <number>0</number>
+       </property>
+       <property name="bottomMargin">
+        <number>8</number>
+       </property>
+       <item>
+        <widget class="QPushButton" name="b_Toggle">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>40</height>
+          </size>
+         </property>
+         <property name="text">
+          <string/>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Accueil">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Accueil</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Traiter_fichier">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Traitement de produits</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Convertir_PDF">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Facture PDF</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Historique">
+         <property name="enabled">
+          <bool>false</bool>
+         </property>
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Historique</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="checkable">
+          <bool>true</bool>
+         </property>
+         <property name="autoExclusive">
+          <bool>true</bool>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <spacer name="verticalSpacer_sidebar">
+         <property name="orientation">
+          <enum>Qt::Orientation::Vertical</enum>
+         </property>
+         <property name="sizeHint" stdset="0">
+          <size>
+           <width>20</width>
+           <height>40</height>
+          </size>
+         </property>
+        </spacer>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Parametres">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>Paramètres</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_A_propos">
+         <property name="minimumSize">
+          <size>
+           <width>0</width>
+           <height>44</height>
+          </size>
+         </property>
+         <property name="text">
+          <string>A propos</string>
+         </property>
+         <property name="iconSize">
+          <size>
+           <width>22</width>
+           <height>22</height>
+          </size>
+         </property>
+         <property name="flat">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+      </layout>
      </widget>
     </item>
     <item>
@@ -129,102 +338,6 @@
     </item>
    </layout>
   </widget>
-  <widget class="QMenuBar" name="menubar">
-   <property name="geometry">
-    <rect>
-     <x>0</x>
-     <y>0</y>
-     <width>756</width>
-     <height>22</height>
-    </rect>
-   </property>
-   <property name="maximumSize">
-    <size>
-     <width>16777215</width>
-     <height>22</height>
-    </size>
-   </property>
-   <property name="font">
-    <font>
-     <family>Segoe UI</family>
-     <pointsize>10</pointsize>
-     <italic>false</italic>
-     <bold>false</bold>
-     <underline>false</underline>
-     <kerning>true</kerning>
-    </font>
-   </property>
-   <property name="focusPolicy">
-    <enum>Qt::FocusPolicy::NoFocus</enum>
-   </property>
-   <property name="autoFillBackground">
-    <bool>false</bool>
-   </property>
-   <property name="styleSheet">
-    <string notr="true"/>
-   </property>
-   <property name="defaultUp">
-    <bool>false</bool>
-   </property>
-   <property name="nativeMenuBar">
-    <bool>true</bool>
-   </property>
-   <widget class="QMenu" name="menuSavoir_plus">
-    <property name="title">
-     <string>Aide</string>
-    </property>
-    <addaction name="actionA_propos"/>
-    <addaction name="actionCr_dits"/>
-   </widget>
-   <widget class="QMenu" name="menuParam_tres">
-    <property name="geometry">
-     <rect>
-      <x>331</x>
-      <y>124</y>
-      <width>191</width>
-      <height>110</height>
-     </rect>
-    </property>
-    <property name="title">
-     <string>Paramètres</string>
-    </property>
-    <addaction name="actionParametres_avances"/>
-    <addaction name="actionMettre_jour"/>
-   </widget>
-   <addaction name="menuParam_tres"/>
-   <addaction name="menuSavoir_plus"/>
-  </widget>
-  <action name="actionCr_dits">
-   <property name="checkable">
-    <bool>false</bool>
-   </property>
-   <property name="enabled">
-    <bool>true</bool>
-   </property>
-   <property name="text">
-    <string>Crédits</string>
-   </property>
-  </action>
-  <action name="actionA_propos">
-   <property name="text">
-    <string>A propos</string>
-   </property>
-  </action>
-  <action name="actionParam_tres">
-   <property name="text">
-    <string>Paramètres</string>
-   </property>
-  </action>
-  <action name="actionParametres_avances">
-   <property name="text">
-    <string>Paramètres avancés</string>
-   </property>
-  </action>
-  <action name="actionMettre_jour">
-   <property name="text">
-    <string>Mettre à jour</string>
-   </property>
-  </action>
  </widget>
  <resources/>
  <connections/>

@@ -65,28 +65,8 @@ BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des p
 TESSERACT_EXE = os.path.join("tesseract", "tesseract.exe") # chemin pour .exe du logiciel Tesseract de lecture PDF OCR
 TESSDATA_DIR = os.path.join("tesseract", "tessdata") # chemin pour fichiers autres importants pour le logiciel Tesseract
 
-# Fichiers de ressources copiés vers le dossier utilisateur au premier lancement
-FICHIERS_RESSOURCES = [
-    ("pt_base.csv", "parametres"),
-    ("categories.csv", "parametres"),
-    ("fournisseurs.csv", "parametres"),
-    ("labels.csv", "parametres"),
-    ("origines.csv", "parametres"),
-    ("poids_moyen_fl.csv", "parametres"),
-    ("traitement_appertises.csv", "parametres"),
-    ("unites_poids.csv", "parametres"),
-    ("Accueil.ui", "gui"),
-    ("ConvertisseurPDF_resultats.ui", "gui"),
-    ("ConvertisseurPDF_selecteur.ui", "gui"),
-    ("ConvertisseurPDF_chargement.ui", "gui"),
-    ("mainwindow.ui", "gui"),
-    ("Parametres.ui", "gui"),
-    ("Traitement_chargement.ui", "gui"),
-    ("Traitement_resultats.ui", "gui"),
-    ("Traitement_selecteur.ui", "gui"),
-    ("Credits.ui", "gui"),
-    ("A_propos.ui", "gui")
-]
+# Dossiers dont toutes les ressources sont copiées vers le dossier utilisateur
+FICHIERS_RESSOURCES = ("parametres", "gui")
 
 # Créer les répertoires nécessaires si ils n'existent pas
 os.makedirs(USER_APP_DIR, exist_ok=True)
@@ -132,8 +112,27 @@ def copier_fichier_ressource_vers_utilisateur():
     version_installee = _lire_version_installee()  
     nouvelle_version = version_installee != VERSION  # True au 1er lancement ou après MAJ  
   
-    for nom_fichier, sous_dossier in FICHIERS_RESSOURCES:  
-        assurer_fichier_utilisateur(nom_fichier, sous_dossier, forcer=nouvelle_version)  
+    for dossier in FICHIERS_RESSOURCES:
+        chemin_bundle = ressource_path(dossier)
+        dossier_utilisateur = os.path.join(USER_APP_DIR, dossier)
+        if not os.path.isdir(chemin_bundle):
+            continue
+        if os.path.abspath(chemin_bundle) == os.path.abspath(dossier_utilisateur):
+            continue
+
+        for racine, _, fichiers in os.walk(chemin_bundle):
+            chemin_relatif = os.path.relpath(racine, chemin_bundle)
+            destination_racine = (
+                dossier_utilisateur
+                if chemin_relatif == "."
+                else os.path.join(dossier_utilisateur, chemin_relatif)
+            )
+            os.makedirs(destination_racine, exist_ok=True)
+            for nom_fichier in fichiers:
+                source = os.path.join(racine, nom_fichier)
+                destination = os.path.join(destination_racine, nom_fichier)
+                if nouvelle_version or not os.path.exists(destination):
+                    shutil.copy2(source, destination)
   
     if nouvelle_version:  
         _ecrire_version_installee()
