@@ -18,18 +18,17 @@ The project is actively under development. Prefer small, coherent changes that p
 
 ## Architecture
 
-- `main.py` — application entry point.
-- `app.py` — application lifecycle and high-level GUI orchestration.
-- `data_processing.py` — product processing, normalization, and classification.
-- `gestion_ml.py` — ML training and inference.
-- `services.py` — application services and persistence (owner of all database access).
-- `navigation/` — GUI workflow controllers.
-- `gui/` — Qt Designer `.ui` files.
-- `extracteur_facture/` — PDF invoice extraction.
-- `parametres/` — configuration and reference CSVs.
+- `src/epidata/main.py` — installed application entry point; root `main.py` remains a compatibility launcher.
+- `src/epidata/app.py` — application lifecycle and high-level GUI orchestration.
+- `src/epidata/produits/` — product processing, ML training/inference, and product persistence.
+- `src/epidata/factures/extracteurs/` — generic and supplier-specific PDF invoice extraction.
+- `src/epidata/navigation/` — GUI workflow controllers.
+- `src/epidata/resources/gui/` — Qt Designer `.ui` files and styles shipped with the application.
+- `src/epidata/resources/icons/` — application icons.
+- `src/epidata/resources/parametres/` — default configuration CSVs; writable copies live in the user-data directory.
 - `donnees/` — seed/reference data.
 - `modeles/` — serialized ML models and vectorizers.
-- `utils.py` — filesystem and resource path management.
+- `src/epidata/utils.py` — filesystem and resource path management.
 
 Keep responsibilities separated between these components.
 
@@ -124,7 +123,7 @@ Treat database schema and ML model format changes as potentially breaking change
 
 The application must work both in development and as a PyInstaller executable.
 
-Use the existing path-resolution utilities in `utils.py`.
+Use the existing path-resolution utilities in `src/epidata/utils.py`.
 
 Do not hard-code absolute paths.
 
@@ -137,7 +136,7 @@ Current extractors include:
 - generic invoice extraction;
 - JARDIMED-specific extraction.
 
-Relevant code is in `extracteur_facture/` and `navigation/n_extracteur_factures.py`.
+Relevant code is in `src/epidata/factures/extracteurs/` and `src/epidata/navigation/n_extracteur_factures.py`.
 
 When adding a supplier, prefer extending the extraction architecture rather than adding supplier-specific conditions to generic extraction logic.
 

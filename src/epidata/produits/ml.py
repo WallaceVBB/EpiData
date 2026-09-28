@@ -1,7 +1,7 @@
 """Explications du fichier :
-fichier réalise la gestion des modèles de machine learning (création, chargement, remplacement et inférence).
-Il constitue la couche ML : elle est appelée par la couche de traitement (data_processing.py)
-et s'appuie sur la couche de persistance (services.py) pour la base d'entraînement.
+Fichier de gestion des modèles de machine learning (création, chargement, remplacement et inférence).
+Cette couche est appelée par produits/traitement.py et s'appuie sur produits/donnees.py
+pour la base d'entraînement.
 """
 
 ### bibliothèques
@@ -13,7 +13,7 @@ import numpy as np
 import pandas as pd
 from rich.progress import Progress
 
-from utils import console, nettoyer_texte
+from epidata.utils import console, nettoyer_texte
 
 
 ## Code
@@ -33,7 +33,7 @@ class GestionML:
 
     def __init__(self, bd_entrainement_path=None, modeles_dir=None, data_service=None):
         """Initialise la gestion ML sans déclencher d'entraînement ni d'accès disque lourd."""
-        from utils import BD_ENTRAINEMENT, MODELES_DIR
+        from epidata.utils import BD_ENTRAINEMENT, MODELES_DIR
 
         self.bd_entrainement_path = bd_entrainement_path or BD_ENTRAINEMENT
         self.modeles_dir = modeles_dir or MODELES_DIR
@@ -48,7 +48,7 @@ class GestionML:
 
     @staticmethod
     def nettoyer_texte(texte):
-        """Nettoie et normalise le texte (implémentation unique dans utils.py)."""
+        """Nettoie et normalise le texte (implémentation unique dans epidata.utils)."""
         return nettoyer_texte(texte)
 
     def chemin_modele(self, nom_fichier):
@@ -91,7 +91,7 @@ class GestionML:
 
     def _obtenir_data_service(self):
         """Retourne le service de persistance utilisé pour la base d'entraînement."""
-        from services import DataService
+        from epidata.produits.donnees import DataService
 
         if self.data_service is None:
             self.data_service = DataService(bd_entrainement=self.bd_entrainement_path)

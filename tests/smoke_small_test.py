@@ -20,8 +20,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 RACINE_PROJET = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if RACINE_PROJET not in sys.path:
-    sys.path.insert(0, RACINE_PROJET)
+CHEMIN_SRC = os.path.join(RACINE_PROJET, "src")
+if CHEMIN_SRC not in sys.path:
+    sys.path.insert(0, CHEMIN_SRC)
 
 # Répertoire utilisateur temporaire : aucune écriture dans le dépôt.
 # Choisi AVANT l'import des modules de l'application, comme dans full_test.py :
@@ -32,13 +33,13 @@ os.environ["EPIDATA_USER_DIR"] = REPERTOIRE_TEMPORAIRE
 import joblib
 from sklearn.feature_extraction.text import TfidfVectorizer
 
-import data_processing
-import gestion_ml
-import maj_logiciel
-import services
-import utils
-from gestion_ml import GestionML
-from maj_logiciel import MajGestion, MajWorker
+from epidata import utils
+from epidata import maj_logiciel
+from epidata.maj_logiciel import MajGestion, MajWorker
+from epidata.produits import donnees as services
+from epidata.produits import ml as gestion_ml
+from epidata.produits import traitement as data_processing
+from epidata.produits.ml import GestionML
 
 ENTRAINEMENTS_DETECTES = []
 
@@ -69,13 +70,13 @@ def etape(numero, titre):
 
 def test_imports():
     etape(1, "Import des modules refactorés")
-    import app
-    import main
-    import navigation.n_extracteur_factures as n_extracteur
-    import navigation.n_traitement
-    from extracteur_facture import extracteur_generique, extracteur_jardimed
+    import epidata.app as app
+    import epidata.main as main
+    import epidata.navigation.n_extracteur_factures as n_extracteur
+    import epidata.navigation.n_traitement
+    from epidata.factures.extracteurs import extracteur_generique, extracteur_jardimed
 
-    for module in (app, main, navigation.n_traitement, n_extracteur, extracteur_generique, extracteur_jardimed):
+    for module in (app, main, epidata.navigation.n_traitement, n_extracteur, extracteur_generique, extracteur_jardimed):
         verifier(module is not None, f"{module.__name__} s'importe sans erreur")
 
     verifier(hasattr(gestion_ml, "GestionML"), "gestion_ml expose la classe GestionML")
@@ -114,19 +115,41 @@ def test_imports():
 
 def test_sources_propres():
     etape(2, "Absence de dépendances interdites dans les sources")
-    for nom_fichier in os.listdir(os.path.join(RACINE_PROJET, "navigation")):
+    repertoire_navigation = os.path.join(RACINE_PROJET, "src", "epidata", "navigation")
+    for nom_fichier in os.listdir(repertoire_navigation):
         if not nom_fichier.endswith(".py"):
             continue
-        chemin = os.path.join(RACINE_PROJET, "navigation", nom_fichier)
+        chemin = os.path.join(repertoire_navigation, nom_fichier)
         with open(chemin, encoding="utf-8") as fichier:
             contenu = fichier.read()
         verifier("sqlite3" not in contenu, f"navigation/{nom_fichier} n'utilise pas sqlite3 directement")
 
-    with open(os.path.join(RACINE_PROJET, "data_processing.py"), encoding="utf-8") as fichier:
+    chemin_traitement = os.path.join(RACINE_PROJET, "src", "epidata", "produits", "traitement.py")
+    with open(chemin_traitement, encoding="utf-8") as fichier:
         contenu = fichier.read()
-    verifier("tkinter" not in contenu, "data_processing.py n'importe plus tkinter")
-    verifier("sqlite3" not in contenu, "data_processing.py ne contient plus de SQL brut")
-    verifier("INSERT INTO" not in contenu.upper(), "data_processing.py ne contient plus d'INSERT SQL")
+    verifier("tkinter" not in contenu, "produits/traitement.py n'importe plus tkinter")
+    verifier("sqlite3" not in contenu, "produits/traitement.py ne contient plus de SQL brut")
+    verifier("INSERT INTO" not in contenu.upper(), "produits/traitement.py ne contient plus d'INSERT SQL")
+
+
+def test_ressources_embarquees():
+    etape(3, "Ressources embarquées et copie vers le dossier utilisateur")
+    for chemin in (
+        "gui/mainwindow.ui",
+        "icons/epidata_logo.ico",
+        "parametres/labels.csv",
+    ):
+        verifier(os.path.isfile(utils.ressource_path(chemin)), f"la ressource {chemin} est trouvée")
+
+    utils.copier_fichier_ressource_vers_utilisateur()
+    for chemin in (
+        os.path.join("gui", "mainwindow.ui"),
+        os.path.join("parametres", "labels.csv"),
+    ):
+        verifier(
+            os.path.isfile(os.path.join(utils.USER_APP_DIR, chemin)),
+            f"la ressource {chemin} est copiée dans le dossier utilisateur",
+        )
 
 @pytest.fixture
 def data_service():
@@ -135,7 +158,7 @@ def data_service():
     ds.fermer()
 
 def test_schema_produits(data_service):
-    etape(3, "Schéma de la table produits créé par DataService")
+    etape(4, "Schéma de la table produits créé par DataService")
     verifier(data_service.conn is not None, f"base de produits ouverte : {data_service.bd_pt}")
 
     curseur = data_service.conn.cursor()
@@ -156,7 +179,7 @@ def test_schema_produits(data_service):
 
 
 def test_cycle_persistance(data_service):
-    etape(4, "Cycle de persistance via DataService")
+    etape(5, "Cycle de persistance via DataService")
     produit = {
         'texte_brut': 'TOMATE GRAPPE FRANCE 5KG',
         'texte_propre': utils.nettoyer_texte('TOMATE GRAPPE FRANCE 5KG'),
@@ -190,7 +213,7 @@ def test_cycle_persistance(data_service):
 
 
 def test_nettoyer_texte():
-    etape(5, "Source unique de nettoyer_texte")
+    etape(6, "Source unique de nettoyer_texte")
     texte = "  JUS d'Orange  BIO 1,5L!! "
     attendu = utils.nettoyer_texte(texte)
     verifier(gestion_ml.GestionML.nettoyer_texte(texte) == attendu, "GestionML.nettoyer_texte délègue à utils")
@@ -207,7 +230,7 @@ def _fausse_reponse_github(tag_name, assets):
 
 def test_maj_logiciel_structure():
     """Vérifie juste que l'API attendue existe (contrat, pas comportement)."""
-    etape(6, "Module maj_logiciel - structure et méthodes")
+    etape(7, "Module maj_logiciel - structure et méthodes")
 
     for signal in ("progression", "maj_disponible", "aucune_maj", "termine_download", "erreur"):
         verifier(hasattr(MajWorker, signal), f"MajWorker expose le signal {signal}")
@@ -228,7 +251,7 @@ def test_maj_logiciel_structure():
 def test_verifier_maj_comportement():
     """Teste la vraie logique de comparaison de version et de sélection d'asset,
     sans faire de requête réseau (requests.get est mocké)."""
-    etape(7, "MajGestion.verifier_maj - comportement (mocké)")
+    etape(8, "MajGestion.verifier_maj - comportement (mocké)")
 
     ext_attendue = MajGestion._extension_asset_attendue()
 
@@ -268,7 +291,7 @@ def test_verifier_maj_comportement():
 def test_telecharger_asset_comportement():
     """Teste que le téléchargement écrit bien le fichier et déclenche la progression,
     sans faire de vraie requête HTTP."""
-    etape(8, "MajGestion.telecharger_asset - comportement (mocké)")
+    etape(9, "MajGestion.telecharger_asset - comportement (mocké)")
 
     contenu_attendu = b"contenu-installeur-factice" * 1000  # ~27 Ko, plusieurs chunks
 
@@ -301,10 +324,10 @@ def test_scripts_updater_generation():
     """Teste que les scripts d'installation (Windows/Linux) sont bien générés avec
     le bon contenu (chemins, délai anti-verrou de fichier). subprocess.Popen est
     mocké : aucun vrai processus n'est lancé."""
-    etape(9, "Génération des scripts updater.bat / updater.sh")
+    etape(10, "Génération des scripts updater.bat / updater.sh")
 
     faux_installeur = os.path.join(REPERTOIRE_TEMPORAIRE, "EpiData-Setup.exe")
-    with patch("maj_logiciel.subprocess.Popen") as mock_popen:
+    with patch("epidata.maj_logiciel.subprocess.Popen") as mock_popen:
         MajGestion._lancer_updater_windows(faux_installeur)
     verifier(mock_popen.called, "_lancer_updater_windows lance bien un processus (mocké)")
     script_bat = os.path.join(utils.USER_APP_DIR, "updater.bat")
@@ -317,7 +340,7 @@ def test_scripts_updater_generation():
     faux_nouveau = os.path.join(REPERTOIRE_TEMPORAIRE, "EpiData-new.AppImage")
     faux_ancien = os.path.join(REPERTOIRE_TEMPORAIRE, "EpiData.AppImage")
     open(faux_nouveau, "wb").close()
-    with patch("maj_logiciel.subprocess.Popen") as mock_popen_linux:
+    with patch("epidata.maj_logiciel.subprocess.Popen") as mock_popen_linux:
         MajGestion._lancer_updater_linux(faux_nouveau, faux_ancien)
     verifier(mock_popen_linux.called, "_lancer_updater_linux lance bien le script shell (mocké)")
     script_sh = os.path.join(utils.USER_APP_DIR, "updater.sh")
@@ -343,12 +366,13 @@ def main():
     print(f"Répertoire utilisateur temporaire : {REPERTOIRE_TEMPORAIRE}")
     print("Ce test n'entraîne aucun modèle ML : voir tests/full_test.py pour le test complet.\n")
 
-    data_service = None
+    data_service = services.DataService()
     code_sortie = 0
     try:
         test_imports()
         test_sources_propres()
-        data_service = test_schema_produits()
+        test_ressources_embarquees()
+        test_schema_produits(data_service)
         test_cycle_persistance(data_service)
         test_nettoyer_texte()
         test_maj_logiciel_structure()
@@ -356,7 +380,7 @@ def main():
         test_telecharger_asset_comportement()
         test_scripts_updater_generation()
 
-        etape(10, "Garde anti-entraînement")
+        etape(11, "Garde anti-entraînement")
         verifier(not ENTRAINEMENTS_DETECTES, "aucun entraînement de modèle n'a été déclenché")
 
         print("\nSmoke test terminé avec succès (aucun entraînement ML).")

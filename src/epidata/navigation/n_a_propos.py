@@ -1,7 +1,7 @@
 ### Navigation de la fenêtre A propos
 
 from PySide6.QtWidgets import QLabel
-from utils import VERSION
+from epidata.utils import VERSION
 
 PROPOS_TEXT = f"""
 <div style="font-family:'Segoe UI';">

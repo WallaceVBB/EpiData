@@ -20,6 +20,14 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 NOM_APPLICATION = "EpiData"
 VERSION = "0.2.2"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+RESOURCE_ROOT = getattr(sys, "_MEIPASS", PROJECT_ROOT)
+RESOURCE_PACKAGE_ROOT = (
+    os.path.join(sys._MEIPASS, "epidata", "resources")
+    if hasattr(sys, "_MEIPASS")
+    else os.path.join(os.path.dirname(__file__), "resources")
+)
+PACKAGE_RESOURCE_DIRS = ("gui", "icons", "parametres")
 
 def _est_empaquete():
     """Indique si l'application est exécutée depuis un exécutable PyInstaller."""
@@ -48,7 +56,7 @@ def _determiner_user_app_dir():
         return os.path.abspath(os.path.expanduser(repertoire_force))
     if _est_empaquete():
         return _repertoire_donnees_utilisateur()
-    return os.path.dirname(os.path.abspath(__file__))
+    return PROJECT_ROOT
 
 
 ### Code
@@ -59,12 +67,12 @@ FICHIER_VERSION = os.path.join(USER_APP_DIR, ".version")
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
 PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour les paramètres pour le traitement
 GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
-NAVIGATION_DIR = os.path.join(USER_APP_DIR, "navigation") # sous-dossier pour les fichiers python de navigation GUI
+NAVIGATION_DIR = os.path.join(os.path.dirname(__file__), "navigation")
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des produits traités
-TESSERACT_EXE = os.path.join("tesseract", "tesseract.exe") # chemin pour .exe du logiciel Tesseract de lecture PDF OCR
-TESSDATA_DIR = os.path.join("tesseract", "tessdata") # chemin pour fichiers autres importants pour le logiciel Tesseract
+TESSERACT_EXE = os.path.join(RESOURCE_ROOT, "tesseract", "tesseract.exe")
+TESSDATA_DIR = os.path.join(RESOURCE_ROOT, "tesseract", "tessdata")
 
 # Dossiers dont toutes les ressources sont copiées vers le dossier utilisateur
 FICHIERS_RESSOURCES = ("parametres", "gui")
@@ -78,12 +86,15 @@ os.makedirs(BD_DIR, exist_ok=True)
 def ressource_path (relative_path):
     """Obtient le chemin absolu vers les ressources du programme, que le programme 
     soit empaqueté ou en script."""
-    
-    if hasattr(sys, '_MEIPASS'): # si le programme est empaqueté (.exe)
-        base_path = sys._MEIPASS
-    else: # si le programme est lancé en script (.py)
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, relative_path)
+
+    relative_path = os.fspath(relative_path)
+    premier_dossier = os.path.normpath(relative_path).split(os.sep, 1)[0]
+    racine = (
+        RESOURCE_PACKAGE_ROOT
+        if premier_dossier in PACKAGE_RESOURCE_DIRS
+        else RESOURCE_ROOT
+    )
+    return os.path.join(racine, relative_path)
 
 def detecter_separateur_csv(chemin_fichier):
     """Détecte le séparateur d'un CSV courant (virgule, point-virgule, tabulation ou pipe)."""

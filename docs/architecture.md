@@ -4,32 +4,33 @@ EpiData is organized into several functional layers.
 
 ### Application
 
-- `main.py`: Application entry point.
-- `app.py`: Main application lifecycle, GUI initialization, screen management, and high-level orchestration.
+- `main.py`: Compatibility launcher at the repository root.
+- `src/epidata/main.py`: Installed application entry point.
+- `src/epidata/app.py`: Main application lifecycle, GUI initialization, screen management, and high-level orchestration.
 
 ### Data Processing
 
-- `data_processing.py`: Core product-processing logic and data normalization. It orchestrates the ML and persistence layers and contains neither raw SQL nor GUI code.
-- `gestion_ml.py`: `GestionML`, the single owner of model loading (`.joblib`), training (`creer_modeles`/`recreer_modeles`), and inference (TF-IDF cosine, LinearSVC, hybrid).
-- `services.py`: `DataService`, the single owner of database access (schema creation, migration, CRUD) and reference CSV loading.
-- `utils.py`: Filesystem management, resource discovery, cross-platform path resolution, and shared helpers such as `nettoyer_texte`.
+- `src/epidata/produits/traitement.py`: Product-processing logic that orchestrates ML and persistence without GUI code or raw SQL.
+- `src/epidata/produits/ml.py`: `GestionML`, responsible for model loading, training and inference.
+- `src/epidata/produits/donnees.py`: `DataService`, responsible for database access and reference CSV loading.
+- `src/epidata/utils.py`: Filesystem management, resource discovery, cross-platform path resolution, and shared helpers such as `nettoyer_texte`.
 
 ### Layer dependencies
 
 Dependencies flow in one direction only:
 
 ```
-navigation/ → data_processing.py → gestion_ml.py → services.py → utils.py
+epidata.navigation → epidata.produits.traitement → epidata.produits.ml / epidata.produits.donnees → epidata.utils
 ```
 
-- `navigation/` never opens a database connection; it calls `DataService` methods.
-- `data_processing.py` writes products through `DataService.inserer_produit` and predicts through `GestionML`.
-- `gestion_ml.py` uses a dedicated `DataService` bound to the training database (`bd_entrainement.db`), separate from the product database (`bd_pt.db`).
-- Text cleaning (`nettoyer_texte`) has a single implementation in `utils.py`; other layers delegate to it.
+- Navigation never opens a database connection; it calls `DataService` methods.
+- Product processing writes through `DataService.inserer_produit` and predicts through `GestionML`.
+- `GestionML` uses a dedicated `DataService` bound to the training database (`bd_entrainement.db`), separate from the product database (`bd_pt.db`).
+- Text cleaning (`nettoyer_texte`) has a single implementation in `epidata.utils`; other layers delegate to it.
 
-### Navigation
+### Domain packages and navigation
 
-- `navigation/`: GUI workflow controllers for specific application modules.
+- `src/epidata/navigation/`: GUI workflow controllers for specific application modules.
   - `n_traitement.py`: Product-processing workflow.
   - `n_extracteur_factures.py`: PDF invoice conversion workflow.
 
@@ -37,13 +38,16 @@ Navigation modules should primarily coordinate UI events, workflows, and service
 
 ### GUI
 
-- `gui/`: Qt Designer `.ui` files defining the application's graphical interfaces.
+- `src/epidata/resources/gui/`: Qt Designer `.ui` files and styles, bundled with the Python package.
+- `src/epidata/resources/icons/`: Application icons bundled with the Python package.
+- `src/epidata/resources/parametres/`: Default CSV configuration bundled with the Python package.
+- `src/epidata/factures/extracteurs/`: Generic and supplier-specific PDF invoice extractors.
 
 The `.ui` files are XML-based Qt Designer definitions and are loaded dynamically by the application.
 
 ### Configuration and Reference Data
 
-- `parametres/`: CSV configuration and reference files, including labels, origins, categories, weights, and units.
+- The writable `parametres/` directory in the user-data folder contains the user's active configuration copies.
 - `donnees/`: Seed data and reference CSV files.
 - `modeles/`: Serialized machine learning models and vectorizers.
 - `bases_de_donnees/`: SQLite databases, `bd_pt.db` (processed products) and `bd_entrainement.db` (validated training pairs).

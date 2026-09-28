@@ -43,11 +43,10 @@ from sklearn.metrics import accuracy_score, classification_report, f1_score
 from sklearn.model_selection import train_test_split
 from sklearn.svm import LinearSVC
 
-# Permet d'importer utils.py / services.py depuis la racine du projet,
-# même si ce script est lancé depuis le dossier tests/.
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Permet d'importer le paquet de l'application même si ce script est lancé depuis tests/.
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
-from utils import BD_ENTRAINEMENT, nettoyer_texte
+from epidata.utils import BD_ENTRAINEMENT, nettoyer_texte
 
 console = Console()
 

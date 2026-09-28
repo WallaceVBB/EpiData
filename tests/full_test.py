@@ -69,6 +69,11 @@ def analyser_arguments():
 
 ARGUMENTS = analyser_arguments()
 
+RACINE_PROJET = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CHEMIN_SRC = os.path.join(RACINE_PROJET, "src")
+if CHEMIN_SRC not in sys.path:
+    sys.path.insert(0, CHEMIN_SRC)
+
 # Le répertoire de données doit être choisi AVANT l'import des modules de l'application :
 # utils.py résout tous les chemins à l'import.
 REPERTOIRE_TEMPORAIRE = None
@@ -82,10 +87,10 @@ os.environ["EPIDATA_USER_DIR"] = REPERTOIRE_DONNEES
 
 import pandas as pd
 
-import utils
-from data_processing import ClassificateurProduits
-from gestion_ml import GestionML
-from services import DataService
+from epidata import utils
+from epidata.produits.donnees import DataService
+from epidata.produits.ml import GestionML
+from epidata.produits.traitement import ClassificateurProduits
 
 DESIGNATIONS_SECOURS = [
     "TOMATE GRAPPE FRANCE CAT1 5KG",
@@ -278,7 +283,7 @@ def etape_pagination():
     from PySide6.QtUiTools import QUiLoader
     from PySide6.QtWidgets import QApplication
 
-    from navigation.n_traitement import TAILLE_PAGE_RESULTATS, TraitementNavigation
+    from epidata.navigation.n_traitement import TAILLE_PAGE_RESULTATS, TraitementNavigation
 
     application = QApplication.instance() or QApplication([])
     chemin_ui = utils.ressource_path(os.path.join("gui", "Traitement_resultats.ui"))

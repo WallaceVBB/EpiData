@@ -67,7 +67,9 @@ def _find_project_utils():
             if current in seen:
                 break
             seen.add(current)
-            candidate = current / "utils.py"
+            candidate = current / "src" / "epidata" / "utils.py"
+            if not candidate.is_file():
+                candidate = current / "utils.py"
             if candidate.is_file():
                 spec = importlib.util.spec_from_file_location("cantine_project_utils", candidate)
                 module = importlib.util.module_from_spec(spec)
