@@ -4,9 +4,10 @@ import os
 from pathlib import Path
 
 from PySide6.QtCore import QObject, Qt, QThread, Signal, Slot
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QFileDialog, QMessageBox, QProgressDialog
 
-from utils import _est_empaquete, console
+from utils import console, ressource_path
 
 
 class TraitementModelesWorker(QThread):
@@ -112,10 +113,11 @@ class ExportBdPtWorker(QThread):
 class ParametresNavigation(QObject):
     """Navigation et actions de la page de paramètres du logiciel."""
 
-    def __init__(self, data_service, load_gui):
+    def __init__(self, data_service, load_gui, basculer_theme):
         super().__init__()
         self.data_service = data_service
         self.load_gui = load_gui
+        self.basculer_theme = basculer_theme
         self._export_worker = None
         self._export_progress = None
         # La fenêtre est chargée une seule fois puis réutilisée
@@ -123,6 +125,17 @@ class ParametresNavigation(QObject):
 
     def _configurer_parametres(self, fenetre):
         self.page = fenetre  # garde le même nom que dans le reste du fichier
+        self.page_donnees_utilisateur = self.load_gui("Parametres_donnees_utilisateur.ui")
+        self.page_avances = self.load_gui("Parametres_avances.ui")
+
+        for index in reversed(range(self.page.stackedWidget.count())):
+            widget = self.page.stackedWidget.widget(index)
+            self.page.stackedWidget.removeWidget(widget)
+            widget.deleteLater()
+
+        self.page.stackedWidget.addWidget(self.page_donnees_utilisateur)
+        self.page.stackedWidget.addWidget(self.page_avances)
+        self.page.stackedWidget.setCurrentWidget(self.page_donnees_utilisateur)
         self._connect_buttons()
 
     def ouvrir_parametres(self):
@@ -135,31 +148,42 @@ class ParametresNavigation(QObject):
             self.fenetre.activateWindow()
 
     def _connect_buttons(self):
-        self.page.b_Recreer_Modeles.clicked.connect(
+        self.page.b_Donnees_Utilisateur.clicked.connect(
+            lambda: self.page.stackedWidget.setCurrentWidget(self.page_donnees_utilisateur)
+        )
+        self.page.b_Avances.clicked.connect(
+            lambda: self.page.stackedWidget.setCurrentWidget(self.page_avances)
+        )
+        self.page.b_Style_Mode.setIcon(
+            QIcon(ressource_path(os.path.join("icons", "i_Style_mode.png")))
+        )
+        self.page.b_Style_Mode.clicked.connect(self.basculer_theme)
+
+        self.page_avances.b_Recreer_Modeles.clicked.connect(
             self.on_recreer_modeles
         )
 
-        self.page.b_Recreer_BD_Entrainement.clicked.connect(
+        self.page_avances.b_Recreer_BD_Entrainement.clicked.connect(
             self.on_recreer_bd_entrainement
         )
 
-        self.page.b_Recreer_BD_PT.clicked.connect(
+        self.page_avances.b_Recreer_BD_PT.clicked.connect(
             self.on_recreer_bd_pt
         )
 
-        self.page.b_MAJ_BD_Entrainement.clicked.connect(
+        self.page_avances.b_MAJ_BD_Entrainement.clicked.connect(
             self.on_maj_bd_entrainement
         )
 
-        self.page.b_Supprimer_Donnees_Utilisateur.clicked.connect(
+        self.page_donnees_utilisateur.b_Supprimer_Donnees_Utilisateur.clicked.connect(
             self.on_supprimer_donnees_utilisateur
         )
 
-        self.page.b_Telecharger_BD_PT.clicked.connect(
+        self.page_donnees_utilisateur.b_Telecharger_BD_PT.clicked.connect(
               self.on_telecharger_bd_pt
         )
 
-        self.page.b_Telecharger_BD_Entrainement.clicked.connect(
+        self.page_donnees_utilisateur.b_Telecharger_BD_Entrainement.clicked.connect(
               self.on_telecharger_bd_entrainement
         )
 

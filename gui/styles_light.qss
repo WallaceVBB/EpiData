@@ -31,6 +31,12 @@ QLabel {
 	color: #2b2f33;
 }
 
+QWidget#A_Propos,
+QScrollArea#scrollArea,
+QWidget#scrollAreaWidgetContents {
+	background-color: #f4f7f8;
+}
+
 /* ---------- Sidebar (mainwindow.ui) ---------- */
 QFrame#frame_sidebar {
 	background-color: #0097b2;

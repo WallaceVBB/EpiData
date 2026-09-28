@@ -309,13 +309,6 @@
      </widget>
     </item>
     <item>
-     <widget class="Line" name="line_main">
-      <property name="orientation">
-       <enum>Qt::Orientation::Vertical</enum>
-      </property>
-     </widget>
-    </item>
-    <item>
      <widget class="QStackedWidget" name="stackedWidget">
       <property name="sizePolicy">
        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">

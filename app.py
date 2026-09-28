@@ -50,7 +50,11 @@ class Application (QObject):
         # Dernière sous-page du groupe convertisseur facture pdf
         self.derniere_page_convertisseur_pdf = "convertir_pdf"
 
-        self.parametres_navigation = ParametresNavigation(data_service=self.data_service,load_gui=self.load_gui)
+        self.parametres_navigation = ParametresNavigation(
+            data_service=self.data_service,
+            load_gui=self.load_gui,
+            basculer_theme=self.basculer_theme,
+        )
 
         self.maj_navigation = MajNavigation(parent_widget=self.window)
 

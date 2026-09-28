@@ -54,7 +54,7 @@ PROPOS_TEXT = f"""
         <b>Soutien au développement</b><br>
         Groupement des Épiceries Sociales de Bourgogne-Franche-Comté
         (GESBFC)<br>
-        <span style="color:#666;">
+        <span>
             Soutien au développement d'EpiData dans le cadre professionnel.
         </span>
     </p>

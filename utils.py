@@ -81,6 +81,8 @@ FICHIERS_RESSOURCES = [
     ("ConvertisseurPDF_chargement.ui", "gui"),
     ("mainwindow.ui", "gui"),
     ("Parametres.ui", "gui"),
+    ("Parametres_BDs.ui", "gui"),
+    ("Parametres_Modeles.ui", "gui"),
     ("Traitement_chargement.ui", "gui"),
     ("Traitement_resultats.ui", "gui"),
     ("Traitement_selecteur.ui", "gui"),
