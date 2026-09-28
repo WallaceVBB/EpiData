@@ -118,7 +118,7 @@
      <item row="1" column="1">
       <widget class="QPushButton" name="b_Traitement_Choix">
        <property name="enabled">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
        <property name="text">
         <string>Traiter en choisissant la colonne de désignation</string>
