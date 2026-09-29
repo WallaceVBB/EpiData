@@ -50,6 +50,7 @@ class Application (QObject):
 
         # Dernière sous-page du groupe convertisseur facture pdf
         self.derniere_page_convertisseur_pdf = "convertir_pdf"
+        self._navigation_avant_historique = None
 
         self.parametres_navigation = ParametresNavigation(
             data_service=self.data_service,
@@ -75,6 +76,10 @@ class Application (QObject):
             self.pages,
             data_service=self.data_service,
             history_navigation=self.historique_navigation,
+            show_history_page_callback=lambda page_name: self.show_page(
+                page_name,
+                memoriser_navigation=False,
+            ),
         )
         self.facture_navigation = FactureNavigation(
             self.pages["convertir_pdf"],
@@ -82,6 +87,10 @@ class Application (QObject):
             self.pages,
             data_service=self.data_service,
             history_navigation=self.historique_navigation,
+            show_history_page_callback=lambda page_name: self.show_page(
+                page_name,
+                memoriser_navigation=False,
+            ),
         )
         self.historique_navigation.connecter_navigations(
             self.traitement_navigation,
@@ -172,11 +181,11 @@ class Application (QObject):
     def setup_navigation(self):
         # Connexion des boutons de navigation
         self.window.b_Accueil.clicked.connect(lambda: self.show_page("accueil"))
-        self.window.b_Historique.clicked.connect(self.historique_navigation.ouvrir_historique)
+        self.window.b_Historique.clicked.connect(self.ouvrir_historique)
 
-        self.window.b_Traiter_fichier.clicked.connect(lambda: self.show_page(self.derniere_page_traitement))
+        self.window.b_Traiter_fichier.clicked.connect(self.ouvrir_onglet_traitement)
 
-        self.window.b_Convertir_PDF.clicked.connect(lambda: self.show_page(self.derniere_page_convertisseur_pdf))
+        self.window.b_Convertir_PDF.clicked.connect(self.ouvrir_onglet_convertisseur_pdf)
 
         # Boutons du bas de la sidebar, qui remplacent l'ancienne barre de menu
         self.window.b_Parametres.clicked.connect(self.parametres_navigation.ouvrir_parametres)
@@ -185,6 +194,33 @@ class Application (QObject):
 
         # Rétrécir / élargir la sidebar
         self.setup_sidebar_toggle()
+
+    def ouvrir_onglet_traitement(self):
+        self._restaurer_navigation_avant_historique()
+        self.traitement_navigation.restaurer_etat_normal()
+        self.show_page(self.derniere_page_traitement)
+
+    def ouvrir_onglet_convertisseur_pdf(self):
+        self._restaurer_navigation_avant_historique()
+        self.facture_navigation.restaurer_etat_normal()
+        self.show_page(self.derniere_page_convertisseur_pdf)
+
+    def ouvrir_historique(self):
+        self._navigation_avant_historique = {
+            "traitement": self.derniere_page_traitement,
+            "convertisseur_pdf": self.derniere_page_convertisseur_pdf,
+        }
+        self.historique_navigation.ouvrir_historique()
+
+    def _restaurer_navigation_avant_historique(self):
+        if self._navigation_avant_historique is None:
+            return
+
+        self.derniere_page_traitement = self._navigation_avant_historique["traitement"]
+        self.derniere_page_convertisseur_pdf = self._navigation_avant_historique[
+            "convertisseur_pdf"
+        ]
+        self._navigation_avant_historique = None
 
     def setup_sidebar_toggle(self):
         # Largeurs cibles de la sidebar (repliée = icônes seules, dépliée = icônes + texte)
@@ -258,13 +294,22 @@ class Application (QObject):
 
         self.window.b_Toggle.setIcon(QIcon(pixmap))
 
-    def show_page(self, page_name):
-        # Mémorise la dernière sous-page du groupe traitement  
-        if page_name in ("traitement_produits", "traitement_colonnes", "traitement_chargement", "traitement_resultats"):
-            self.derniere_page_traitement = page_name  
-    
-        if page_name in ("convertir_pdf","convertisseur_pdf_chargement","convertisseur_pdf_resultats"):
-            self.derniere_page_convertisseur_pdf = page_name
+    def show_page(self, page_name, memoriser_navigation=True):
+        if memoriser_navigation:
+            if page_name in (
+                "traitement_produits",
+                "traitement_colonnes",
+                "traitement_chargement",
+                "traitement_resultats",
+            ):
+                self.derniere_page_traitement = page_name
+
+            if page_name in (
+                "convertir_pdf",
+                "convertisseur_pdf_chargement",
+                "convertisseur_pdf_resultats",
+            ):
+                self.derniere_page_convertisseur_pdf = page_name
 
         # Récupération de la page demandée  
         page = self.pages[page_name]  

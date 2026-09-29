@@ -58,17 +58,27 @@ class FactureWorker(QThread):
         return None
 
 class FactureNavigation:
-    def __init__(self, page_widget, show_page_callback, pages, data_service=None, history_navigation=None):
+    def __init__(
+        self,
+        page_widget,
+        show_page_callback,
+        pages,
+        data_service=None,
+        history_navigation=None,
+        show_history_page_callback=None,
+    ):
         self.page = page_widget
         self.pages = pages
         self.show_page = show_page_callback
         self.data_service = data_service
         self.history_navigation = history_navigation
+        self.show_history_page = show_history_page_callback
         self.worker = None
         self._current_output_path = None
         self._current_results_df = None
         self._current_source_path = None
         self._historique_mode = False
+        self._etat_avant_historique = None
         self._connect_buttons()
         self._configurer_redimensionnement()
 
@@ -106,6 +116,7 @@ class FactureNavigation:
         self._current_results_df = None
         self._current_source_path = pdf_path
         self._historique_mode = False
+        self._etat_avant_historique = None
         self._current_output_path = str(Path.home() / "facture_extraite.xlsx")
         self._show_loading_page()
 
@@ -138,12 +149,39 @@ class FactureNavigation:
         QMessageBox.information(self.page, "Conversion terminée", message)
 
     def charger_historique(self, result_df, output_path):
+        if not self._historique_mode:
+            self._etat_avant_historique = {
+                "resultats": self._current_results_df,
+                "fichier_sortie": self._current_output_path,
+                "fichier_source": self._current_source_path,
+            }
         self._current_results_df = result_df
         self._current_output_path = output_path
         self._current_source_path = None
         self._historique_mode = True
         self._populate_results_table(result_df)
         self._show_results_page()
+
+    def restaurer_etat_normal(self):
+        if not self._historique_mode:
+            return
+
+        etat = self._etat_avant_historique or {}
+        self._current_results_df = etat.get("resultats")
+        self._current_output_path = etat.get("fichier_sortie")
+        self._current_source_path = etat.get("fichier_source")
+        self._historique_mode = False
+        self._etat_avant_historique = None
+        self._populate_results_table(
+            self._current_results_df
+            if self._current_results_df is not None
+            else pd.DataFrame()
+        )
+
+        results_page = self.pages.get('convertisseur_pdf_resultats')
+        bouton_autre = getattr(results_page, 'b_Convertir_Autre_Facture', None) if results_page else None
+        if bouton_autre is not None:
+            bouton_autre.setText("Convertir autre fichier")
 
     def _populate_results_table(self, result_df):
         results_page = self.pages.get('convertisseur_pdf_resultats')
@@ -235,7 +273,12 @@ class FactureNavigation:
             bouton_autre.setText(
                 "Revenir à l'historique" if self._historique_mode else "Convertir autre fichier"
             )
-        self.show_page('convertisseur_pdf_resultats')
+        afficher_page = (
+            self.show_history_page
+            if self._historique_mode and self.show_history_page is not None
+            else self.show_page
+        )
+        afficher_page('convertisseur_pdf_resultats')
 
     def _configurer_redimensionnement(self):
         # Colonnes redimensionnables à la souris (Interactive) + dernière colonne qui
@@ -276,7 +319,7 @@ class FactureNavigation:
     def on_autre_fichier(self):
         if self._historique_mode:
             if self.history_navigation is not None:
-                self.history_navigation.ouvrir_historique()
+                self.history_navigation.ouvrir_selecteur()
             else:
                 self.show_page('historique')
             return
