@@ -18,7 +18,7 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 # Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
 NOM_APPLICATION = "EpiData"
-VERSION = "0.2.2"
+VERSION = "1.0.0"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RESOURCE_ROOT = getattr(sys, "_MEIPASS", PROJECT_ROOT)
