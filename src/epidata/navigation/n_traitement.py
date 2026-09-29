@@ -266,12 +266,21 @@ class TraitementWorker(QThread):
 class TraitementNavigation:
     """Navigation et actions de la page de traitement de fichier."""
 
-    def __init__(self, page_widget, show_page_callback, pages, data_service=None, history_navigation=None):
+    def __init__(
+        self,
+        page_widget,
+        show_page_callback,
+        pages,
+        data_service=None,
+        history_navigation=None,
+        show_history_page_callback=None,
+    ):
         self.page = page_widget
         self.pages = pages
         self.show_page = show_page_callback
         self.data_service = data_service
         self.history_navigation = history_navigation
+        self.show_history_page = show_history_page_callback
         self.worker = None
         self._progress_timer = None
         self.current_results_df = None
@@ -293,6 +302,7 @@ class TraitementNavigation:
         self._fichier_choisi = None
         self._historique_mode = False
         self._chemin_historique = None
+        self._etat_avant_historique = None
 
         self._connect_buttons()
         self._connect_progress_buttons()
@@ -609,7 +619,12 @@ class TraitementNavigation:
         if not results_page:
             return
 
-        self.show_page('traitement_resultats')
+        afficher_page = (
+            self.show_history_page
+            if self._historique_mode and self.show_history_page is not None
+            else self.show_page
+        )
+        afficher_page('traitement_resultats')
         self._page_courante = 0
         self._populate_results_table(self.current_results_df)
 
@@ -1009,7 +1024,7 @@ class TraitementNavigation:
     def on_autre_fichier(self):
         if self._historique_mode:
             if self.history_navigation is not None:
-                self.history_navigation.ouvrir_historique()
+                self.history_navigation.ouvrir_selecteur()
             else:
                 self.show_page('historique')
             return
@@ -1020,7 +1035,36 @@ class TraitementNavigation:
         self.show_page('traitement_produits')
 
     def charger_historique(self, dataframe, chemin_historique):
+        if not self._historique_mode:
+            self._etat_avant_historique = {
+                "resultats": self.current_results_df,
+                "fichier": self._fichier_choisi,
+                "page": self._page_courante,
+            }
         self.current_results_df = dataframe
         self._historique_mode = True
         self._chemin_historique = chemin_historique
         self._show_results_page()
+
+    def restaurer_etat_normal(self):
+        if not self._historique_mode:
+            return
+
+        etat = self._etat_avant_historique or {}
+        self.current_results_df = etat.get("resultats")
+        self._fichier_choisi = etat.get("fichier")
+        self._page_courante = etat.get("page", 0)
+        self._historique_mode = False
+        self._chemin_historique = None
+        self._etat_avant_historique = None
+        self._populate_results_table(self.current_results_df)
+
+        results_page = self.pages.get('traitement_resultats')
+        bouton_autre = getattr(results_page, 'b_Autre_Fichier', None) if results_page else None
+        if bouton_autre is not None:
+            bouton_autre.setText("Traiter autre fichier")
+        bouton_supprimer = getattr(results_page, 'b_Supprimer_Resultats', None) if results_page else None
+        if bouton_supprimer is not None:
+            bouton_supprimer.setEnabled(
+                self.current_results_df is not None and not self.current_results_df.empty
+            )

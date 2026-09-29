@@ -31,6 +31,7 @@ class HistoriqueNavigation:
         self.pages = pages
         self.traitement_navigation = None
         self.facture_navigation = None
+        self._derniere_entree_ouverte = None
         self.dossier_historique = Path(USER_APP_DIR) / "historique"
         self.dossier_historique.mkdir(parents=True, exist_ok=True)
 
@@ -41,6 +42,17 @@ class HistoriqueNavigation:
         self.facture_navigation = facture_navigation
 
     def ouvrir_historique(self):
+        self.actualiser()
+        if self._derniere_entree_ouverte is not None:
+            type_resultat, chemin = self._derniere_entree_ouverte
+            if Path(chemin).is_file():
+                self._ouvrir_entree(type_resultat, chemin)
+                return
+            self._derniere_entree_ouverte = None
+        self.show_page("historique")
+
+    def ouvrir_selecteur(self):
+        self._derniere_entree_ouverte = None
         self.actualiser()
         self.show_page("historique")
 
@@ -145,10 +157,12 @@ class HistoriqueNavigation:
             liste.setItemWidget(item, ligne)
 
     def _ouvrir_entree(self, type_resultat, item):
+        chemin = item.data(Qt.ItemDataRole.UserRole) if isinstance(item, QListWidgetItem) else str(item)
+        self._derniere_entree_ouverte = (type_resultat, chemin)
         if type_resultat == "traitement":
-            self._ouvrir_traitement(item)
+            self._ouvrir_traitement(chemin)
         else:
-            self._ouvrir_conversion(item)
+            self._ouvrir_conversion(chemin)
 
     def _supprimer_resultat(self, chemin, type_resultat):
         nom_type = "ce traitement" if type_resultat == "traitement" else "cette conversion"
@@ -164,6 +178,10 @@ class HistoriqueNavigation:
 
         try:
             chemin.unlink()
+            if self._derniere_entree_ouverte is not None and Path(
+                self._derniere_entree_ouverte[1]
+            ) == chemin:
+                self._derniere_entree_ouverte = None
             self.actualiser()
         except OSError as exc:
             QMessageBox.critical(self.page, "Historique", f"Impossible de supprimer cet élément : {exc}")
@@ -172,10 +190,15 @@ class HistoriqueNavigation:
         if self.traitement_navigation is None:
             return
         try:
-            dataframe = pd.read_csv(item.data(Qt.ItemDataRole.UserRole), encoding="utf-8-sig")
+            chemin = (
+                item.data(Qt.ItemDataRole.UserRole)
+                if isinstance(item, QListWidgetItem)
+                else str(item)
+            )
+            dataframe = pd.read_csv(chemin, encoding="utf-8-sig")
             self.traitement_navigation.charger_historique(
                 dataframe,
-                item.data(Qt.ItemDataRole.UserRole),
+                chemin,
             )
         except Exception as exc:
             QMessageBox.critical(self.page, "Historique", f"Impossible d'ouvrir ce traitement : {exc}")
@@ -183,7 +206,11 @@ class HistoriqueNavigation:
     def _ouvrir_conversion(self, item):
         if self.facture_navigation is None:
             return
-        chemin = item.data(Qt.ItemDataRole.UserRole)
+        chemin = (
+            item.data(Qt.ItemDataRole.UserRole)
+            if isinstance(item, QListWidgetItem)
+            else str(item)
+        )
         try:
             dataframe = pd.read_excel(chemin)
             self.facture_navigation.charger_historique(dataframe, chemin)
