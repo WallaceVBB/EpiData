@@ -152,7 +152,7 @@ class HistoriqueNavigation:
 
             layout.addWidget(ouvrir, 1)
             layout.addWidget(supprimer)
-            ligne.setFixedHeight(32)
+            ligne.setFixedHeight(30)
             item.setSizeHint(ligne.sizeHint())
             liste.setItemWidget(item, ligne)
 

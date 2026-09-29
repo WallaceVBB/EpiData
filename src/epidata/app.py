@@ -104,10 +104,8 @@ class Application (QObject):
         self.show_page("accueil")
 
     def charger_style_global(self):
-        style_dark = os.path.join(GUI_DIR, "styles_dark.qss")
-        style_light = os.path.join(GUI_DIR, "styles_light.qss")
-        nom_fichier = style_dark if self.theme == "dark" else style_light
-        style_path = ressource_path(nom_fichier)
+        nom_fichier = "styles_dark.qss" if self.theme == "dark" else "styles_light.qss"
+        style_path = ressource_path(os.path.join("gui", nom_fichier))
         try:
             with open(style_path, "r", encoding="utf-8") as fichier_style:
                 self.app.setStyleSheet(fichier_style.read())
