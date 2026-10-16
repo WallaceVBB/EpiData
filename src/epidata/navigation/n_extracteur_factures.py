@@ -9,27 +9,34 @@ import unicodedata
 from pathlib import Path
 
 import pandas as pd
-from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QStandardItem, QStandardItemModel
+from PySide6.QtCore import QThread, Signal, QSize, Qt
+from PySide6.QtGui import QIcon, QStandardItem, QStandardItemModel
 from PySide6.QtWidgets import (
     QFileDialog,
     QGridLayout,
+    QHBoxLayout,
     QMessageBox,
     QPushButton,
     QSizePolicy,
     QTableWidgetItem,
+    QToolButton,
+    QWidget,
 )
 
 from epidata.factures.methodes_personnalisees import (
     DEFAULT_IGNORE_TERMS,
+    charger_methode,
     charger_methodes,
     creer_signature_table,
     detecter_ligne_entete,
     entetes_colonnes,
     enregistrer_methode,
     lire_tables_pdf,
+    modifier_methode,
+    supprimer_methode,
     suggerer_colonne_valeurs,
 )
+from epidata.utils import ressource_path
 
 
 class FactureWorker(QThread):
@@ -103,22 +110,68 @@ class FactureNavigation:
         if layout is None or bouton_creation is None:
             return
 
-        for button in self._boutons_methodes:
-            layout.removeWidget(button)
-            button.deleteLater()
-        self._boutons_methodes.clear()
+        for ligne in self._lignes_methodes:
+            layout.removeWidget(ligne)
+            ligne.deleteLater()
+        self._lignes_methodes.clear()
 
         for row, methode in enumerate(self._methodes_personnalisees, start=2):
-            button = QPushButton(self.page)
-            button.setObjectName(f"b_methode_{methode['id']}")
-            button.setText(f"Convertir facture {methode['name']}")
-            button.clicked.connect(
+            convertir = QPushButton(f"Convertir facture {methode['name']}", self.page)
+            convertir.setObjectName(f"b_methode_{methode['id']}")
+            convertir.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Fixed,
+            )
+            convertir.clicked.connect(
                 lambda checked=False, method_id=methode["id"]: self.on_convertir_facture(
                     f"personnalise:{method_id}"
                 )
             )
-            layout.addWidget(button, row, 1)
-            self._boutons_methodes.append(button)
+            actions = QWidget(self.page)
+            row_layout = QHBoxLayout(actions)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+            modifier = QToolButton(actions)
+            modifier.setIcon(QIcon(ressource_path("icons/i_Parametres.png")))
+            modifier.setToolTip(f"Modifier la méthode {methode['name']}")
+            modifier.setAccessibleName(f"Modifier la méthode {methode['name']}")
+            modifier.setFixedSize(34, 34)
+            modifier.setIconSize(QSize(22, 22))
+            modifier.setAutoRaise(True)
+            modifier.setStyleSheet(
+                "QToolButton { background: transparent; border: none; padding: 0; }"
+                "QToolButton:hover, QToolButton:pressed { background: transparent; }"
+            )
+            modifier.clicked.connect(
+                lambda checked=False, method_id=methode["id"]:
+                    self._modifier_methode(method_id)
+            )
+            supprimer = QToolButton(actions)
+            supprimer.setIcon(QIcon(ressource_path("icons/i_Poubelle.png")))
+            supprimer.setToolTip(f"Supprimer la méthode {methode['name']}")
+            supprimer.setAccessibleName(f"Supprimer la méthode {methode['name']}")
+            supprimer.setFixedSize(34, 34)
+            supprimer.setIconSize(QSize(22, 22))
+            supprimer.setAutoRaise(True)
+            supprimer.setStyleSheet(
+                "QToolButton { background: transparent; border: none; padding: 0; }"
+                "QToolButton:hover, QToolButton:pressed { background: transparent; }"
+            )
+            supprimer.clicked.connect(
+                lambda checked=False, method_id=methode["id"]:
+                    self._supprimer_methode(method_id)
+            )
+            row_layout.addWidget(modifier)
+            row_layout.addWidget(supprimer)
+            actions.setSizePolicy(
+                QSizePolicy.Policy.Maximum,
+                QSizePolicy.Policy.Fixed,
+            )
+            actions.adjustSize()
+            actions.setFixedWidth(actions.sizeHint().width())
+            layout.addWidget(convertir, row, 1)
+            layout.addWidget(actions, row, 2, alignment=Qt.AlignmentFlag.AlignLeft)
+            self._lignes_methodes.extend((convertir, actions))
 
         layout.removeWidget(bouton_creation)
         layout.addWidget(bouton_creation, len(self._methodes_personnalisees) + 2, 1)
@@ -129,6 +182,8 @@ class FactureNavigation:
             QMessageBox.critical(self.page, "Création de méthode", "La page de configuration est introuvable.")
             return
 
+        self._methode_en_modification = None
+        page.label_titre.setText("Créer un type de facture")
         page.lineEdit_fournisseur.clear()
         page.label_chemin_pdf.setText("Aucun fichier sélectionné")
         page.comboBox_tableau.clear()
@@ -142,6 +197,94 @@ class FactureNavigation:
         self._tables_exemple = []
         self._chemin_exemple = None
         self.show_page("convertisseur_pdf_creation")
+
+    def _modifier_methode(self, method_id):
+        try:
+            method = charger_methode(method_id)
+        except (FileNotFoundError, OSError, ValueError) as exc:
+            QMessageBox.warning(
+                self.page,
+                "Modifier une méthode",
+                f"Impossible de lire la méthode enregistrée : {exc}",
+            )
+            self._charger_methodes_personnalisees()
+            return
+
+        self._methodes_personnalisees = [
+            method if item["id"] == method_id else item
+            for item in self._methodes_personnalisees
+        ]
+        self._methode_en_modification = method
+        page = self.pages["convertisseur_pdf_creation"]
+        page.label_titre.setText(f"Modifier la méthode « {method['name']} »")
+        page.lineEdit_fournisseur.setText(method["name"])
+        page.label_chemin_pdf.setText(
+            "Facultatif : choisissez un PDF pour modifier aussi les colonnes."
+        )
+        page.comboBox_tableau.clear()
+        page.comboBox_ligne_entete.clear()
+        page.tableWidget_apercu.clear()
+        page.tableWidget_apercu.setRowCount(0)
+        page.tableWidget_apercu.setColumnCount(0)
+        page.plainTextEdit_ignorer.setPlainText("\n".join(method.get("ignore_terms", [])))
+        self._tables_exemple = []
+        self._chemin_exemple = None
+        self._charger_mappings_existants(page, method)
+        self.show_page("convertisseur_pdf_creation")
+
+    def _charger_mappings_existants(self, page, method):
+        labels = method.get("column_labels", [])
+        mappings = method["mappings"]
+        width = max(len(labels), max(mappings.values(), default=-1) + 1)
+        for field, required, widget_name in self._champs_mapping():
+            combo = getattr(page, widget_name)
+            combo.clear()
+            if not required:
+                combo.addItem("Ne pas importer", -1)
+            for column_index in range(width):
+                label = (
+                    labels[column_index]
+                    if column_index < len(labels) and labels[column_index]
+                    else f"Colonne {column_index + 1}"
+                )
+                combo.addItem(f"Colonne {column_index + 1} — {label[:45]}", column_index)
+            selected_index = mappings.get(field, -1)
+            combo.setCurrentIndex(combo.findData(selected_index))
+
+    def _supprimer_methode(self, method_id):
+        method = next(
+            (item for item in self._methodes_personnalisees if item["id"] == method_id),
+            None,
+        )
+        if method is None:
+            QMessageBox.warning(self.page, "Supprimer une méthode", "Cette méthode est introuvable.")
+            self._charger_methodes_personnalisees()
+            return
+
+        confirmation = QMessageBox.question(
+            self.page,
+            "Supprimer une méthode",
+            f"Supprimer définitivement la méthode « {method['name']} » ?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if confirmation != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            supprimer_methode(method_id)
+            self._charger_methodes_personnalisees()
+        except OSError as exc:
+            QMessageBox.critical(
+                self.page,
+                "Suppression impossible",
+                f"La méthode n'a pas pu être supprimée : {exc}",
+            )
+
+    def _annuler_creation_methode(self):
+        self._methode_en_modification = None
+        self._tables_exemple = []
+        self._chemin_exemple = None
+        self.show_page("convertir_pdf")
 
     @staticmethod
     def _champs_mapping():
@@ -167,6 +310,7 @@ class FactureNavigation:
             self._chemin_exemple = path
             self.pages["convertisseur_pdf_creation"].label_chemin_pdf.setText(path)
             self._tables_exemple = []
+            self._analyser_pdf_exemple()
 
     def _analyser_pdf_exemple(self):
         from pdfminer.pdfexceptions import PDFException
@@ -200,6 +344,11 @@ class FactureNavigation:
             self._mettre_a_jour_apercu()
         except (OSError, ValueError, PDFException) as exc:
             self._tables_exemple = []
+            page.comboBox_tableau.clear()
+            page.comboBox_ligne_entete.clear()
+            page.tableWidget_apercu.clear()
+            page.tableWidget_apercu.setRowCount(0)
+            page.tableWidget_apercu.setColumnCount(0)
             QMessageBox.warning(page, "Analyse du PDF", str(exc))
 
     def _mettre_a_jour_apercu(self, *_):
@@ -355,41 +504,75 @@ class FactureNavigation:
             QMessageBox.information(page, "Nom du fournisseur", "Saisissez le nom du fournisseur.")
             page.lineEdit_fournisseur.setFocus()
             return
-        if not self._tables_exemple:
+        if not self._tables_exemple and self._methode_en_modification is None:
             QMessageBox.information(
                 page,
                 "Facture exemple",
-                "Choisissez une facture exemple et cliquez sur « Analyser le tableau ».",
+                "Choisissez une facture exemple. Son analyse démarre automatiquement.",
             )
             return
 
+        try:
+            ignore_terms = page.plainTextEdit_ignorer.toPlainText().splitlines()
+            if self._methode_en_modification is not None:
+                old_method = self._methode_en_modification
+                if self._tables_exemple:
+                    mappings = self._lire_mappings_selectionnes(page)
+                    table_index = page.comboBox_tableau.currentData()
+                    header_row = page.comboBox_ligne_entete.currentData()
+                    table = self._tables_exemple[table_index]
+                    signature = creer_signature_table(
+                        table,
+                        mappings,
+                        header_row,
+                    )
+                    column_labels = entetes_colonnes(table, header_row)
+                else:
+                    mappings = self._lire_mappings_selectionnes(page)
+                    signature = old_method.get("table_signature", [])
+                    column_labels = old_method.get("column_labels", [])
+                modifier_methode(
+                    old_method["id"],
+                    name,
+                    mappings,
+                    ignore_terms,
+                    signature,
+                    column_labels,
+                )
+            else:
+                mappings = self._lire_mappings_selectionnes(page)
+                table_index = page.comboBox_tableau.currentData()
+                table = self._tables_exemple[table_index]
+                header_row = page.comboBox_ligne_entete.currentData()
+                enregistrer_methode(
+                    name,
+                    mappings,
+                    ignore_terms,
+                    creer_signature_table(
+                        table,
+                        mappings,
+                        header_row,
+                    ),
+                    entetes_colonnes(table, header_row),
+                )
+            self._charger_methodes_personnalisees()
+            self._methode_en_modification = None
+            QMessageBox.information(
+                page,
+                "Méthode enregistrée",
+                f"Le type de facture « {name} » a été enregistré.",
+            )
+            self.show_page("convertir_pdf")
+        except (ValueError, FileExistsError, OSError) as exc:
+            QMessageBox.warning(page, "Impossible d'enregistrer", str(exc))
+
+    def _lire_mappings_selectionnes(self, page):
         mappings = {}
         for field, _, widget_name in self._champs_mapping():
             index = getattr(page, widget_name).currentData()
             if index is not None and index >= 0:
                 mappings[field] = index
-        try:
-            table_index = page.comboBox_tableau.currentData()
-            table = self._tables_exemple[table_index]
-            enregistrer_methode(
-                name,
-                mappings,
-                page.plainTextEdit_ignorer.toPlainText().splitlines(),
-                creer_signature_table(
-                    table,
-                    mappings,
-                    page.comboBox_ligne_entete.currentData(),
-                ),
-            )
-            self._charger_methodes_personnalisees()
-            QMessageBox.information(
-                page,
-                "Méthode enregistrée",
-                f"Le type de facture « {name} » est maintenant disponible dans le sélecteur.",
-            )
-            self.show_page("convertir_pdf")
-        except (ValueError, FileExistsError, OSError) as exc:
-            QMessageBox.warning(page, "Impossible d'enregistrer", str(exc))
+        return mappings
 
     def __init__(
         self,
@@ -413,9 +596,10 @@ class FactureNavigation:
         self._historique_mode = False
         self._etat_avant_historique = None
         self._methodes_personnalisees = []
-        self._boutons_methodes = []
+        self._lignes_methodes = []
         self._tables_exemple = []
         self._chemin_exemple = None
+        self._methode_en_modification = None
         self._connect_buttons()
         self._charger_methodes_personnalisees()
         self._configurer_redimensionnement()
@@ -435,7 +619,6 @@ class FactureNavigation:
         creation_page = self.pages.get("convertisseur_pdf_creation")
         if creation_page:
             creation_page.b_Choisir_PDF.clicked.connect(self._choisir_pdf_exemple)
-            creation_page.b_Analyser_PDF.clicked.connect(self._analyser_pdf_exemple)
             creation_page.comboBox_tableau.currentIndexChanged.connect(
                 self._mettre_a_jour_apercu
             )
@@ -444,7 +627,7 @@ class FactureNavigation:
             )
             creation_page.b_Enregistrer_Methode.clicked.connect(self._enregistrer_methode)
             creation_page.b_Annuler_Creation.clicked.connect(
-                lambda: self.show_page("convertir_pdf")
+                self._annuler_creation_methode
             )
 
         loading_page = self.pages.get('convertisseur_pdf_chargement')

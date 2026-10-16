@@ -38,7 +38,7 @@
    <item>
     <widget class="QLabel" name="label_aide">
      <property name="text">
-      <string>Seuls les tableaux d'au moins 3 colonnes et 2 lignes sont affichés. Le plus grand est présélectionné ; vous pouvez ensuite choisir la ligne des en-têtes avant d'associer les colonnes aux champs Excel.</string>
+      <string>Seuls les tableaux d'au moins 3 colonnes et 2 lignes sont affichés. Le plus grand est présélectionné automatiquement. Après avoir choisi une facture, sélectionnez la ligne des en-têtes et associez les colonnes voulues ; choisissez « Ne pas importer » pour les colonnes absentes.</string>
      </property>
      <property name="wordWrap">
       <bool>true</bool>
@@ -88,11 +88,6 @@
         </widget>
        </item>
        <item>
-        <widget class="QPushButton" name="b_Analyser_PDF">
-         <property name="text">
-          <string>Analyser le tableau</string>
-         </property>
-        </widget>
        </item>
       </layout>
      </item>
@@ -163,7 +158,7 @@
       </font>
      </property>
      <property name="text">
-      <string>Associez les colonnes (les champs non utilisés peuvent rester vides) :</string>
+      <string>Associez les colonnes à importer. Pour une colonne absente, choisissez « Ne pas importer » :</string>
      </property>
     </widget>
    </item>

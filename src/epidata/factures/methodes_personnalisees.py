@@ -124,6 +124,11 @@ def _valider_methode(methode: dict) -> None:
         not isinstance(term, str) for term in table_signature
     ):
         raise ValueError("La signature du tableau est invalide.")
+    column_labels = methode.get("column_labels", [])
+    if not isinstance(column_labels, list) or any(
+        not isinstance(label, str) for label in column_labels
+    ):
+        raise ValueError("Les libellés de colonnes sont invalides.")
 
 
 def creer_identifiant(nom: str) -> str:
@@ -134,25 +139,8 @@ def creer_identifiant(nom: str) -> str:
     return identifier
 
 
-def enregistrer_methode(
-    nom: str,
-    mappings: dict[str, int],
-    ignore_terms: list[str],
-    table_signature: list[str] | None = None,
-) -> dict:
-    methode = {
-        "id": creer_identifiant(nom),
-        "name": nom.strip(),
-        "mappings": mappings,
-        "ignore_terms": [term.strip() for term in ignore_terms if term.strip()],
-        "table_signature": table_signature or [],
-    }
+def _ecrire_methode(methode: dict, path: Path) -> dict:
     _valider_methode(methode)
-
-    path = Path(METHODES_FACTURES_DIR) / f"{methode['id']}.json"
-    if path.exists():
-        raise FileExistsError(f"Une méthode existe déjà pour « {nom.strip()} ».")
-
     path.parent.mkdir(parents=True, exist_ok=True)
     temporary = path.with_suffix(".json.tmp")
     temporary.write_text(
@@ -161,6 +149,59 @@ def enregistrer_methode(
     )
     temporary.replace(path)
     return methode
+
+
+def enregistrer_methode(
+    nom: str,
+    mappings: dict[str, int],
+    ignore_terms: list[str],
+    table_signature: list[str] | None = None,
+    column_labels: list[str] | None = None,
+) -> dict:
+    methode = {
+        "id": creer_identifiant(nom),
+        "name": nom.strip(),
+        "mappings": mappings,
+        "ignore_terms": [term.strip() for term in ignore_terms if term.strip()],
+        "table_signature": table_signature or [],
+        "column_labels": column_labels or [],
+    }
+    _valider_methode(methode)
+
+    path = Path(METHODES_FACTURES_DIR) / f"{methode['id']}.json"
+    if path.exists():
+        raise FileExistsError(f"Une méthode existe déjà pour « {nom.strip()} ».")
+
+    return _ecrire_methode(methode, path)
+
+
+def modifier_methode(
+    method_id: str,
+    nom: str,
+    mappings: dict[str, int],
+    ignore_terms: list[str],
+    table_signature: list[str],
+    column_labels: list[str] | None = None,
+) -> dict:
+    path = Path(METHODES_FACTURES_DIR) / f"{method_id}.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"La méthode de facture « {method_id} » est introuvable.")
+    methode = {
+        "id": method_id,
+        "name": nom.strip(),
+        "mappings": mappings,
+        "ignore_terms": [term.strip() for term in ignore_terms if term.strip()],
+        "table_signature": table_signature,
+        "column_labels": column_labels or [],
+    }
+    return _ecrire_methode(methode, path)
+
+
+def supprimer_methode(method_id: str) -> None:
+    path = Path(METHODES_FACTURES_DIR) / f"{method_id}.json"
+    if not path.is_file():
+        raise FileNotFoundError(f"La méthode de facture « {method_id} » est introuvable.")
+    path.unlink()
 
 
 def charger_methodes() -> tuple[list[dict], list[str]]:
@@ -410,7 +451,12 @@ def extraire_facture_pdf(
             "Vérifiez les colonnes choisies et les lignes à ignorer."
         )
 
-    dataframe = pd.DataFrame(rows, columns=STANDARD_COLUMNS)
+    output_columns = [
+        "Date Facture",
+        *[column for column, _ in COLUMNS if column in methode["mappings"]],
+        "Source extraction",
+    ]
+    dataframe = pd.DataFrame(rows, columns=output_columns)
     output_path = Path(chemin_sortie_excel).expanduser()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with pd.ExcelWriter(output_path, engine="openpyxl") as writer:
