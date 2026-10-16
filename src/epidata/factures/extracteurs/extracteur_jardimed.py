@@ -25,7 +25,7 @@ def extraire_facture_pdf(chemin_pdf, chemin_sortie_excel="facture_extraite.xlsx"
     # Expression régulière conçue pour identifier les lignes de produits
     # (recherche l'unité caractéristique : K = Kilo, P = Pièce, R = Remise/Retour, C = Colis)
     regex_produit = re.compile(
-        r"^([A-Za-z0-9*/\-\. ]+?)\s+"  # Description du produit et Origine
+        r"^([\w*/\-\.'’ ]+?)\s+"  # Description du produit et Origine
         r"([\d\.-]+)([KPRC])\s+"  # Prix unitaire + Unité (K, P, R, C)
         r"([\d\.-]+)\s+"  # Prix_Final
         r"([\d\.-]+)\s*"  # Palettes
