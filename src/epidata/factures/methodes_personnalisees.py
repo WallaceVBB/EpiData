@@ -71,25 +71,31 @@ def lire_tables_pdf(chemin_pdf: str | Path, max_pages: int | None = 3) -> list[l
     with pdfplumber.open(pdf_path) as pdf:
         pages = pdf.pages if max_pages is None else pdf.pages[:max_pages]
         for page in pages:
-            for table in page.extract_tables(table_settings=TABLE_SETTINGS) or []:
-                rows = [
-                    [re.sub(r"\s+", " ", str(cell or "")).strip() for cell in row]
-                    for row in table
-                ]
-                width = max((len(row) for row in rows), default=0)
-                populated_columns = {
-                    column_index
-                    for row in rows
-                    for column_index, cell in enumerate(row)
-                    if cell
-                }
-                if (
-                    len(rows) >= 2
-                    and width >= 3
-                    and len(populated_columns) >= 3
-                    and any(any(cell for cell in row) for row in rows)
-                ):
-                    tables.append(rows)
+            tables.extend(_extraire_tables_page(page))
+    return tables
+
+
+def _extraire_tables_page(page) -> list[list[list[str]]]:
+    tables = []
+    for table in page.extract_tables(table_settings=TABLE_SETTINGS) or []:
+        rows = [
+            [re.sub(r"\s+", " ", str(cell or "")).strip() for cell in row]
+            for row in table
+        ]
+        width = max((len(row) for row in rows), default=0)
+        populated_columns = {
+            column_index
+            for row in rows
+            for column_index, cell in enumerate(row)
+            if cell
+        }
+        if (
+            len(rows) >= 2
+            and width >= 3
+            and len(populated_columns) >= 3
+            and any(any(cell for cell in row) for row in rows)
+        ):
+            tables.append(rows)
     return tables
 
 
@@ -367,11 +373,26 @@ def extraire_facture_pdf(
 ):
     """Extrait les lignes d'un tableau PDF selon les colonnes choisies par l'utilisateur."""
     import pandas as pd
+    import pdfplumber
+
+    from epidata.factures.extracteurs.extracteur_generique import invoice_dates
 
     if not method_id:
         raise ValueError("Aucune méthode de facture personnalisée n'a été précisée.")
     methode = charger_methode(method_id)
-    tables = lire_tables_pdf(chemin_pdf, max_pages=None)
+    pdf_path = Path(chemin_pdf).expanduser()
+    if not pdf_path.is_file():
+        raise FileNotFoundError(f"Fichier PDF introuvable : {pdf_path}")
+
+    tables = []
+    with pdfplumber.open(pdf_path) as pdf:
+        pages = list(pdf.pages)
+        dates = invoice_dates(pages)
+        for page_index, page in enumerate(pages):
+            tables.extend(
+                (table, dates[page_index])
+                for table in _extraire_tables_page(page)
+            )
     if not tables:
         raise ValueError(
             "Aucun tableau n'a été détecté dans ce PDF. Les méthodes personnalisées "
@@ -386,7 +407,7 @@ def extraire_facture_pdf(
         for term in [*DEFAULT_IGNORE_TERMS, *methode.get("ignore_terms", [])]
         if term.strip()
     ]
-    for table_index, table in enumerate(tables, start=1):
+    for table_index, (table, invoice_date) in enumerate(tables, start=1):
         if not _table_correspond_a_signature(
             table,
             methode.get("table_signature", []),
@@ -437,6 +458,7 @@ def extraire_facture_pdf(
 
             output_row = {column: "" for column in STANDARD_COLUMNS}
             output_row.update(mapped)
+            output_row["Date Facture"] = invoice_date
             output_row["Source extraction"] = f"Méthode personnalisée : {methode['name']}"
             rows.append(output_row)
         if progress_callback:

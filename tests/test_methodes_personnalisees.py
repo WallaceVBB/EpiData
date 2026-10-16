@@ -39,6 +39,29 @@ class FakePdf:
         return None
 
 
+class FakeInvoicePage:
+    def __init__(self, text, table):
+        self.text = text
+        self.table = table
+
+    def extract_text(self, **_kwargs):
+        return self.text
+
+    def extract_tables(self, table_settings=None):
+        return [self.table]
+
+
+class FakeMultiPagePdf:
+    def __init__(self, pages):
+        self.pages = pages
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        return None
+
+
 def test_method_is_persisted_and_extracts_configured_columns(tmp_path, monkeypatch):
     import pdfplumber
 
@@ -80,10 +103,41 @@ def test_method_is_persisted_and_extracts_configured_columns(tmp_path, monkeypat
     assert result["Désignation"].tolist() == ["Pommes", "Poires"]
     assert result["Quantité"].tolist() == ["2", "1"]
     assert result["Prix unitaire HT"].tolist() == ["1,50", "2,00"]
+    assert result["Date Facture"].tolist() == ["", ""]
     assert "Unité" not in result.columns
     assert result["Source extraction"].unique().tolist() == [
         "Méthode personnalisée : Carrefour"
     ]
+
+
+def test_custom_method_uses_generic_invoice_dates_per_page(tmp_path, monkeypatch):
+    import pdfplumber
+
+    monkeypatch.setattr(methodes, "METHODES_FACTURES_DIR", str(tmp_path / "methods"))
+    table = [
+        ["Désignation", "Quantité", "Prix unitaire"],
+        ["Pommes", "2", "3,00"],
+    ]
+    pages = [
+        FakeInvoicePage("FACTURE N° 123 du 04.05.2025\nInformations fournisseur", table),
+        FakeInvoicePage("Suite de la facture\nInformations fournisseur", table),
+    ]
+    monkeypatch.setattr(pdfplumber, "open", lambda _path: FakeMultiPagePdf(pages))
+    pdf_path = tmp_path / "invoice.pdf"
+    pdf_path.write_bytes(b"fake pdf")
+    methodes.enregistrer_methode(
+        "Carrefour",
+        {"Désignation": 0, "Quantité": 1, "Prix unitaire HT": 2},
+        [],
+    )
+
+    result = methodes.extraire_facture_pdf(
+        pdf_path,
+        tmp_path / "result.xlsx",
+        method_id="carrefour",
+    )
+
+    assert result["Date Facture"].tolist() == ["04/05/2025", "04/05/2025"]
 
 
 def test_method_can_be_updated_and_deleted(tmp_path, monkeypatch):
@@ -278,6 +332,7 @@ def test_real_sample_invoices_extract_product_rows(
         f"Méthode personnalisée : {filename.removesuffix('.pdf')}"
     ).all()
     if filename == "facture_teste2.pdf":
+        assert result["Date Facture"].unique().tolist() == ["28/07/2026"]
         assert result["Désignation"].iloc[0] == "LENTILLES VERTES BONDUELLE 400grs"
         assert result["Quantité"].tolist() == ["864", "864", "864", "864", "432", "432"]
         assert result["Montant net HT"].tolist() == [
@@ -289,6 +344,7 @@ def test_real_sample_invoices_extract_product_rows(
             "548,95",
         ]
     if filename == "facture_teste3.pdf":
+        assert result["Date Facture"].eq("").all()
         descriptions = result["Désignation"].str.casefold().tolist()
         assert any("subventionn" in value for value in descriptions)
         assert any("(12x1l)" in value for value in descriptions)
