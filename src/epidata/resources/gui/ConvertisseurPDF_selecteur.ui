@@ -56,6 +56,9 @@
      <property name="text">
       <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p align=&quot;center&quot;&gt;&lt;span style=&quot; font-size:14pt;&quot;&gt;Choississez une facture en format PDF pour convertir ses tableaux de produits en tableaux Excel&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
      </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
@@ -96,13 +99,6 @@
    </item>
    <item>
     <layout class="QGridLayout" name="gridLayout">
-     <item row="1" column="1">
-      <widget class="QPushButton" name="b_Convertir_Facture_JARDIMED">
-       <property name="text">
-        <string>Convertir facture JARDIMED</string>
-       </property>
-      </widget>
-     </item>
      <item row="0" column="0">
       <spacer name="horizontalSpacer">
        <property name="orientation">
@@ -115,6 +111,16 @@
         </size>
        </property>
       </spacer>
+     </item>
+     <item row="4" column="1">
+      <widget class="QPushButton" name="b_Ajouter_Methode_Facture">
+       <property name="class">
+        <string>creation-button</string>
+       </property>
+       <property name="text">
+        <string>Ajouter un nouveau type de facture</string>
+       </property>
+      </widget>
      </item>
      <item row="0" column="1">
       <widget class="QPushButton" name="b_Convertir_Facture_generique">
@@ -132,6 +138,26 @@
         <size>
          <width>40</width>
          <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item row="1" column="1">
+      <widget class="QPushButton" name="b_Convertir_Facture_JARDIMED">
+       <property name="text">
+        <string>Convertir facture JARDIMED</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <spacer name="verticalSpacer_6">
+       <property name="orientation">
+        <enum>Qt::Orientation::Vertical</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>20</width>
+         <height>40</height>
         </size>
        </property>
       </spacer>

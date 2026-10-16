@@ -678,6 +678,43 @@ def invoice_date(text: str, page=None) -> str:
     return ""
 
 
+def invoice_dates(pages, page_texts: list[str] | None = None) -> list[str]:
+    """Extrait la date de chaque page, en reprenant la dernière date reconnue."""
+    if page_texts is None:
+        page_texts = [page_text(page) for page in pages]
+    if len(page_texts) != len(pages):
+        raise ValueError("Le nombre de textes doit correspondre au nombre de pages.")
+
+    dates = []
+    last_date = ""
+    for page_num, page in enumerate(pages, start=1):
+        date = invoice_date(page_texts[page_num - 1], page)
+
+        if not date:
+            for offset in (1, 2):
+                idx = page_num - 1 + offset
+                if idx >= len(pages):
+                    break
+                candidate_text = page_texts[idx]
+                date = invoice_date(candidate_text)
+                if date and re.search(r"date\s+base", normalize_key(candidate_text), re.IGNORECASE):
+                    break
+                if re.search(
+                    r"total\s+(?:ht|ttc)|net\s+à\s+payer|net\s+a\s+payer",
+                    normalize_key(candidate_text),
+                    re.IGNORECASE,
+                ):
+                    if date:
+                        break
+                date = ""
+
+        if date:
+            last_date = date
+        dates.append(date or last_date)
+
+    return dates
+
+
 def nearest_x(target: float, values: list[float]) -> float | None:
     if not values:
         return None
@@ -1165,7 +1202,6 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
     report(PHASE_PREP[0], "Ouverture du PDF...")
 
     all_rows: list[dict[str, str]] = []
-    last_date = ""
 
     with pdfplumber.open(pdf_path) as pdf:
         pages = list(pdf.pages)
@@ -1182,27 +1218,9 @@ def extraire_facture_pdf(chemin_pdf: str | Path, chemin_sortie_excel: str | Path
 
         # --- Phase 2 : extraction des lignes produits ---------------------
         extract_start, extract_end = PHASE_EXTRACT
+        page_dates = invoice_dates(pages, page_texts)
         for page_num, page in enumerate(pages, start=1):
-            text = page_texts[page_num - 1]
-            d = invoice_date(text, page)
-
-            if not d:
-                for offset in (1, 2):
-                    idx = page_num - 1 + offset
-                    if idx >= len(pages):
-                        break
-                    candidate_text = page_texts[idx]
-                    d = invoice_date(candidate_text)
-                    if d and re.search(r"date\s+base", normalize_key(candidate_text), re.IGNORECASE):
-                        break
-                    if re.search(r"total\s+(?:ht|ttc)|net\s+à\s+payer|net\s+a\s+payer", normalize_key(candidate_text), re.IGNORECASE):
-                        if d:
-                            break
-                    d = ""
-
-            if d:
-                last_date = d
-            d = d or last_date
+            d = page_dates[page_num - 1]
             rows = extract_page(page, d)
             if not rows:
                 rows = extract_fallback_page(page, d)

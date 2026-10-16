@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Form</class>
+ <widget class="QWidget" name="Form">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1050</width>
+    <height>760</height>
+   </rect>
+  </property>
+  <property name="font">
+   <font>
+    <pointsize>11</pointsize>
+   </font>
+  </property>
+  <property name="windowTitle">
+   <string>Créer un type de facture</string>
+  </property>
+  <layout class="QVBoxLayout" name="verticalLayout">
+   <item>
+    <widget class="QLabel" name="label_titre">
+     <property name="font">
+      <font>
+       <pointsize>18</pointsize>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Créer un type de facture</string>
+     </property>
+     <property name="alignment">
+      <set>Qt::AlignmentFlag::AlignCenter</set>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_aide">
+     <property name="text">
+      <string>Seuls les tableaux d'au moins 3 colonnes et 2 lignes sont affichés. Le plus grand est présélectionné automatiquement. Après avoir choisi une facture, sélectionnez la ligne des en-têtes et associez les colonnes voulues ; choisissez « Ne pas importer » pour les colonnes absentes.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QFormLayout" name="formLayout">
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_fournisseur">
+       <property name="text">
+        <string>Nom du fournisseur :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QLineEdit" name="lineEdit_fournisseur">
+       <property name="placeholderText">
+        <string>Exemple : Carrefour</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_pdf">
+       <property name="text">
+        <string>Facture exemple :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <layout class="QHBoxLayout" name="horizontalLayout_pdf">
+       <item>
+        <widget class="QLabel" name="label_chemin_pdf">
+         <property name="text">
+          <string>Aucun fichier sélectionné</string>
+         </property>
+         <property name="wordWrap">
+          <bool>true</bool>
+         </property>
+        </widget>
+       </item>
+       <item>
+        <widget class="QPushButton" name="b_Choisir_PDF">
+         <property name="text">
+          <string>Choisir un PDF...</string>
+         </property>
+        </widget>
+       </item>
+       <item>
+       </item>
+      </layout>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_limite_pdf">
+     <property name="text">
+      <string>La facture exemple doit contenir du texte sélectionnable. Pour les factures scannées, utilisez plutôt le convertisseur générique.</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_table">
+     <item>
+      <widget class="QLabel" name="label_tableau">
+       <property name="text">
+        <string>Tableau détecté :</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBox_tableau"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_entete">
+     <item>
+      <widget class="QLabel" name="label_ligne_entete">
+       <property name="text">
+        <string>Ligne des noms de colonnes :</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QComboBox" name="comboBox_ligne_entete"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QTableWidget" name="tableWidget_apercu">
+     <property name="minimumSize">
+      <size>
+       <width>0</width>
+       <height>180</height>
+      </size>
+     </property>
+     <property name="editTriggers">
+      <set>QAbstractItemView::EditTrigger::NoEditTriggers</set>
+     </property>
+     <property name="selectionMode">
+      <enum>QAbstractItemView::SelectionMode::NoSelection</enum>
+     </property>
+     <property name="alternatingRowColors">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_association">
+     <property name="font">
+      <font>
+       <bold>true</bold>
+      </font>
+     </property>
+     <property name="text">
+      <string>Associez les colonnes à importer. Pour une colonne absente, choisissez « Ne pas importer » :</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QGridLayout" name="gridLayout_colonnes">
+     <item row="0" column="0">
+      <widget class="QLabel" name="label_designation">
+       <property name="text">
+        <string>Désignation (obligatoire) :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="1">
+      <widget class="QComboBox" name="cb_designation"/>
+     </item>
+     <item row="0" column="2">
+      <widget class="QLabel" name="label_quantite">
+       <property name="text">
+        <string>Quantité :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="0" column="3">
+      <widget class="QComboBox" name="cb_quantite"/>
+     </item>
+     <item row="1" column="0">
+      <widget class="QLabel" name="label_unite">
+       <property name="text">
+        <string>Unité :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="1">
+      <widget class="QComboBox" name="cb_unite"/>
+     </item>
+     <item row="1" column="2">
+      <widget class="QLabel" name="label_colis">
+       <property name="text">
+        <string>Nb. colis :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="1" column="3">
+      <widget class="QComboBox" name="cb_colis"/>
+     </item>
+     <item row="2" column="0">
+      <widget class="QLabel" name="label_livree">
+       <property name="text">
+        <string>Quantité livrée :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="1">
+      <widget class="QComboBox" name="cb_livree"/>
+     </item>
+     <item row="2" column="2">
+      <widget class="QLabel" name="label_prix">
+       <property name="text">
+        <string>Prix unitaire HT :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="2" column="3">
+      <widget class="QComboBox" name="cb_prix"/>
+     </item>
+     <item row="3" column="0">
+      <widget class="QLabel" name="label_montant">
+       <property name="text">
+        <string>Montant net HT :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="1">
+      <widget class="QComboBox" name="cb_montant"/>
+     </item>
+     <item row="3" column="2">
+      <widget class="QLabel" name="label_tva">
+       <property name="text">
+        <string>Taux TVA :</string>
+       </property>
+      </widget>
+     </item>
+     <item row="3" column="3">
+      <widget class="QComboBox" name="cb_tva"/>
+     </item>
+    </layout>
+   </item>
+   <item>
+    <widget class="QLabel" name="label_ignorer">
+     <property name="text">
+      <string>Lignes à ignorer (facultatif, un mot ou une expression par ligne) :</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <widget class="QPlainTextEdit" name="plainTextEdit_ignorer">
+     <property name="maximumSize">
+      <size>
+       <width>16777215</width>
+       <height>70</height>
+      </size>
+     </property>
+     <property name="plainText">
+      <string>total ht
+total ttc
+net à payer
+total tva</string>
+     </property>
+    </widget>
+   </item>
+   <item>
+    <layout class="QHBoxLayout" name="horizontalLayout_boutons">
+     <item>
+      <spacer name="horizontalSpacer">
+       <property name="orientation">
+        <enum>Qt::Orientation::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+     <item>
+      <widget class="QPushButton" name="b_Annuler_Creation">
+       <property name="text">
+        <string>Annuler</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <widget class="QPushButton" name="b_Enregistrer_Methode">
+       <property name="text">
+        <string>Enregistrer ce type de facture</string>
+       </property>
+      </widget>
+     </item>
+     <item>
+      <spacer name="horizontalSpacer_2">
+       <property name="orientation">
+        <enum>Qt::Orientation::Horizontal</enum>
+       </property>
+       <property name="sizeHint" stdset="0">
+        <size>
+         <width>40</width>
+         <height>20</height>
+        </size>
+       </property>
+      </spacer>
+     </item>
+    </layout>
+   </item>
+  </layout>
+ </widget>
+ <resources/>
+ <connections/>
+</ui>
