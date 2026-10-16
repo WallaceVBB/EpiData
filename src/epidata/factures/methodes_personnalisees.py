@@ -77,11 +77,36 @@ def lire_tables_pdf(chemin_pdf: str | Path, max_pages: int | None = 3) -> list[l
 
 def _extraire_tables_page(page) -> list[list[list[str]]]:
     tables = []
-    for table in page.extract_tables(table_settings=TABLE_SETTINGS) or []:
+    words = None
+    for detected_table in page.find_tables(table_settings=TABLE_SETTINGS):
         rows = [
             [re.sub(r"\s+", " ", str(cell or "")).strip() for cell in row]
-            for row in table
+            for row in detected_table.extract()
         ]
+        for row_index, table_row in enumerate(detected_table.rows):
+            if row_index >= len(rows) or not table_row.cells:
+                continue
+            cell = table_row.cells[0]
+            if cell is None:
+                continue
+            x0, top, x1, bottom = cell
+            if words is None:
+                words = page.extract_words(use_text_flow=True)
+            if not any(
+                word["x0"] < detected_table.bbox[0] < word["x1"]
+                and top <= (word["top"] + word["bottom"]) / 2 < bottom
+                for word in words
+            ):
+                continue
+            cell_words = [
+                word
+                for word in words
+                if x0 <= word["x0"] < x1
+                and top <= (word["top"] + word["bottom"]) / 2 < bottom
+            ]
+            cell_words.sort(key=lambda word: (round(word["top"], 1), word["x0"]))
+            rows[row_index][0] = " ".join(word["text"] for word in cell_words)
+
         width = max((len(row) for row in rows), default=0)
         populated_columns = {
             column_index

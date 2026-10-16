@@ -29,6 +29,43 @@ class FakePage:
             ],
         ]
 
+    def find_tables(self, table_settings=None):
+        return [
+            FakeTable(table, table_index)
+            for table_index, table in enumerate(self.extract_tables(table_settings))
+        ]
+
+    def extract_words(self, use_text_flow=False):
+        return []
+
+
+class FakeTable:
+    def __init__(self, table, table_index):
+        self.table = table
+        self.bbox = (table_index * 100, 0, table_index * 100 + 100, len(table) * 10)
+        self.rows = [
+            FakeTableRow(
+                [
+                    (
+                        table_index * 100 + column_index * 10,
+                        row_index * 10,
+                        table_index * 100 + (column_index + 1) * 10,
+                        row_index * 10 + 10,
+                    )
+                    for column_index in range(max(map(len, table), default=0))
+                ]
+            )
+            for row_index, _row in enumerate(table)
+        ]
+
+    def extract(self):
+        return self.table
+
+
+class FakeTableRow:
+    def __init__(self, cells):
+        self.cells = cells
+
 
 class FakePdf:
     def __enter__(self):
@@ -49,6 +86,12 @@ class FakeInvoicePage:
 
     def extract_tables(self, table_settings=None):
         return [self.table]
+
+    def find_tables(self, table_settings=None):
+        return [FakeTable(self.table, 0)]
+
+    def extract_words(self, use_text_flow=False):
+        return []
 
 
 class FakeMultiPagePdf:
@@ -138,6 +181,48 @@ def test_custom_method_uses_generic_invoice_dates_per_page(tmp_path, monkeypatch
     )
 
     assert result["Date Facture"].tolist() == ["04/05/2025", "04/05/2025"]
+
+
+def test_table_extraction_does_not_include_words_overflowing_from_previous_cell():
+    class OverlappingTextPage:
+        def find_tables(self, table_settings=None):
+            header_cells = [(86, 0, 200, 10), (200, 0, 230, 10), (230, 0, 270, 10)]
+            product_cells = [(86, 10, 200, 20), (200, 10, 230, 20), (230, 10, 270, 20)]
+            return [FakeTableRows([header_cells, product_cells])]
+
+        def extract_words(self, use_text_flow=False):
+            return [
+                {"text": "DESIGNATION", "x0": 90, "x1": 180, "top": 2, "bottom": 8},
+                {"text": "QTE", "x0": 205, "x1": 215, "top": 2, "bottom": 8},
+                {"text": "PRIX", "x0": 235, "x1": 250, "top": 2, "bottom": 8},
+                {"text": "PRODUITTRANSFORMES", "x0": 26, "x1": 124, "top": 12, "bottom": 18},
+                {"text": "Herbes", "x0": 88, "x1": 112, "top": 12, "bottom": 18},
+                {"text": "en", "x0": 115, "x1": 125, "top": 12, "bottom": 18},
+                {"text": "pots", "x0": 130, "x1": 145, "top": 12, "bottom": 18},
+                {"text": "France", "x0": 150, "x1": 180, "top": 12, "bottom": 18},
+                {"text": "2", "x0": 205, "x1": 210, "top": 12, "bottom": 18},
+                {"text": "2,00", "x0": 235, "x1": 255, "top": 12, "bottom": 18},
+            ]
+
+    class FakeTableRows:
+        def __init__(self, rows):
+            self.rows = [FakeTableRow(row) for row in rows]
+            self.bbox = (86, 0, 270, 20)
+
+        def extract(self):
+            return [
+                ["DESIGNATION", "QTE", "PRIX"],
+                ["SHFeOrRbeMsE eSn pots France", "2", "2,00"],
+            ]
+
+    tables = methodes._extraire_tables_page(OverlappingTextPage())
+
+    assert tables == [
+        [
+            ["DESIGNATION", "QTE", "PRIX"],
+            ["Herbes en pots France", "2", "2,00"],
+        ]
+    ]
 
 
 def test_method_can_be_updated_and_deleted(tmp_path, monkeypatch):
