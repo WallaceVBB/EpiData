@@ -18,7 +18,7 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 
 # Variable d'environnement permettant de forcer le répertoire de données (utile pour les tests)
 NOM_APPLICATION = "EpiData"
-VERSION = "1.1.0"
+VERSION = "1.1.2"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 RESOURCE_ROOT = getattr(sys, "_MEIPASS", PROJECT_ROOT)
@@ -69,6 +69,7 @@ PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour le
 GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
 NAVIGATION_DIR = os.path.join(os.path.dirname(__file__), "navigation")
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
+METHODES_FACTURES_DIR = os.path.join(USER_APP_DIR, "methodes_factures")
 BD_ENTRAINEMENT = os.path.join(BD_DIR, "bd_entrainement.db") # chemin vers la base de données d'entrainement
 BD_PT = os.path.join(BD_DIR, "bd_pt.db") # chemin vers la base de données des produits traités
 TESSERACT_EXE = os.path.join(RESOURCE_ROOT, "tesseract", "tesseract.exe")
@@ -82,6 +83,7 @@ os.makedirs(USER_APP_DIR, exist_ok=True)
 os.makedirs(MODELES_DIR, exist_ok=True)
 os.makedirs(PARAMETRES_DIR, exist_ok=True)
 os.makedirs(BD_DIR, exist_ok=True)
+os.makedirs(METHODES_FACTURES_DIR, exist_ok=True)
 
 def ressource_path (relative_path):
     """Obtient le chemin absolu vers les ressources du programme, que le programme 
@@ -177,4 +179,3 @@ def _lire_version_installee():
 def _ecrire_version_installee():  
     with open(FICHIER_VERSION, "w", encoding="utf-8") as f:  
         f.write(VERSION)  
-

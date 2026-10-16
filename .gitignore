@@ -211,10 +211,13 @@ __marimo__/
 /bases_de_donnees
 .version
 /historique
+/methodes_factures
 
 #Fichiers testes
 /benchmark_out
-/tests/facture_teste.pdf
+/tests/facture_teste1.pdf
+/tests/facture_teste2.pdf
+/tests/facture_teste3.pdf
 
 # Développement
 .qtcreator

@@ -169,6 +169,7 @@ class Application (QObject):
         self.pages["convertir_pdf"] = self.load_gui("ConvertisseurPDF_selecteur.ui")
         self.pages["convertisseur_pdf_chargement"] = self.load_gui("ConvertisseurPDF_chargement.ui")
         self.pages["convertisseur_pdf_resultats"] = self.load_gui("ConvertisseurPDF_resultats.ui")
+        self.pages["convertisseur_pdf_creation"] = self.load_gui("ConvertisseurPDF_creation.ui")
         self.pages["historique"] = self.load_gui("Historique_selecteur.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
