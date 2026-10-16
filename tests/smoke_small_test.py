@@ -142,14 +142,14 @@ def test_ressources_embarquees():
         verifier(os.path.isfile(utils.ressource_path(chemin)), f"la ressource {chemin} est trouvée")
 
     utils.copier_fichier_ressource_vers_utilisateur()
-    for chemin in (
-        os.path.join("gui", "mainwindow.ui"),
-        os.path.join("parametres", "labels.csv"),
-    ):
-        verifier(
-            os.path.isfile(os.path.join(utils.USER_APP_DIR, chemin)),
-            f"la ressource {chemin} est copiée dans le dossier utilisateur",
-        )
+    verifier(
+        os.path.isfile(os.path.join(utils.GUI_DIR, "mainwindow.ui")),
+        "l'interface est chargée depuis le dossier GUI actif",
+    )
+    verifier(
+        os.path.isfile(os.path.join(utils.USER_APP_DIR, "parametres", "labels.csv")),
+        "le paramètre manquant est copié dans le dossier utilisateur",
+    )
 
 @pytest.fixture
 def data_service():

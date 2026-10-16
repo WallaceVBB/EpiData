@@ -160,6 +160,9 @@
      <property name="text">
       <string>Associez les colonnes à importer. Pour une colonne absente, choisissez « Ne pas importer » :</string>
      </property>
+     <property name="wordWrap">
+      <bool>true</bool>
+     </property>
     </widget>
    </item>
    <item>
@@ -250,6 +253,9 @@
     <widget class="QLabel" name="label_ignorer">
      <property name="text">
       <string>Lignes à ignorer (facultatif, un mot ou une expression par ligne) :</string>
+     </property>
+     <property name="wordWrap">
+      <bool>true</bool>
      </property>
     </widget>
    </item>

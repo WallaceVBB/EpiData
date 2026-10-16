@@ -10,6 +10,7 @@ import platform
 import re
 import shutil
 import sys
+from pathlib import Path
 
 from rich.console import Console
 
@@ -20,11 +21,27 @@ console = Console() # console pour enrichir les impressions dans le terminal (co
 NOM_APPLICATION = "EpiData"
 VERSION = "1.2.0"
 VARIABLE_ENV_USER_DIR = "EPIDATA_USER_DIR"
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+def _trouver_racine_projet(chemin_module):
+    for dossier in Path(chemin_module).resolve().parents:
+        if (
+            (dossier / "pyproject.toml").is_file()
+            and (dossier / "src" / "epidata" / "resources").is_dir()
+        ):
+            return str(dossier)
+    return None
+
+
+PROJECT_ROOT = _trouver_racine_projet(__file__) or os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+)
 RESOURCE_ROOT = getattr(sys, "_MEIPASS", PROJECT_ROOT)
 RESOURCE_PACKAGE_ROOT = (
     os.path.join(sys._MEIPASS, "epidata", "resources")
     if hasattr(sys, "_MEIPASS")
+    else os.path.join(PROJECT_ROOT, "src", "epidata", "resources")
+    if _trouver_racine_projet(__file__)
     else os.path.join(os.path.dirname(__file__), "resources")
 )
 PACKAGE_RESOURCE_DIRS = ("gui", "icons", "parametres")
@@ -66,7 +83,11 @@ FICHIER_VERSION = os.path.join(USER_APP_DIR, ".version")
 # Définir les chemins vers les sous-dossiers et fichiers
 MODELES_DIR = os.path.join(USER_APP_DIR, "modeles") # sous-dossier pour les modèles de machine learning
 PARAMETRES_DIR = os.path.join(USER_APP_DIR, "parametres") # sous-dossier pour les paramètres pour le traitement
-GUI_DIR = os.path.join(USER_APP_DIR, "gui") # sous-dossier pour les fichiers graphiques
+GUI_DIR = (
+    os.path.join(USER_APP_DIR, "gui")
+    if _est_empaquete()
+    else os.path.join(RESOURCE_PACKAGE_ROOT, "gui")
+)  # ressources source en développement, copie utilisateur après installation
 NAVIGATION_DIR = os.path.join(os.path.dirname(__file__), "navigation")
 BD_DIR = os.path.join(USER_APP_DIR, "bases_de_donnees") # sous-dossier pour les bases de données
 METHODES_FACTURES_DIR = os.path.join(USER_APP_DIR, "methodes_factures")
@@ -132,11 +153,18 @@ def assurer_fichier_utilisateur(nom_fichier, sous_dossier=None, forcer=False):
 
 def copier_fichier_ressource_vers_utilisateur():  
     """Copie les ressources vers le dossier utilisateur.  
-    Force la re-copie si la VERSION a changé depuis la dernière fois."""  
+    En développement, ne copie que les paramètres manquants.
+    En application empaquetée, actualise les ressources lors d'un changement de version."""
     version_installee = _lire_version_installee()  
-    nouvelle_version = version_installee != VERSION  # True au 1er lancement ou après MAJ  
+    empaquete = _est_empaquete()
+    nouvelle_version = empaquete and version_installee != VERSION
+    dossiers_ressources = (
+        FICHIERS_RESSOURCES if empaquete else tuple(
+            dossier for dossier in FICHIERS_RESSOURCES if dossier != "gui"
+        )
+    )
   
-    for dossier in FICHIERS_RESSOURCES:
+    for dossier in dossiers_ressources:
         chemin_bundle = ressource_path(dossier)
         dossier_utilisateur = os.path.join(USER_APP_DIR, dossier)
         if not os.path.isdir(chemin_bundle):

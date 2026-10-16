@@ -25,7 +25,10 @@ QMessageBox QLabel {
 QMainWindow,
 #centralwidget,
 QStackedWidget,
-QStackedWidget > QWidget {
+QStackedWidget > QWidget,
+QScrollArea#appPageScrollArea,
+QWidget#appPageScrollViewport,
+QWidget#appPageContent {
 	background-color: #24272a;
 }
 
@@ -102,6 +105,18 @@ QPushButton:pressed {
 QPushButton:disabled {
 	background-color: #3a3f43;
 	color: #7a8085;
+}
+
+QPushButton[class="creation-button"] {
+	background-color: #559158;
+	color: #ffffff;
+	font-weight: 600;
+}
+QPushButton[class="creation-button"]:hover {
+	background-color: #46994a;
+}
+QPushButton[class="creation-button"]:pressed {
+	background-color: #448348;
 }
 
 QPushButton[class="card-button"] {

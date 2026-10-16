@@ -6,7 +6,7 @@ import sys
 
 from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve, QSettings
 from PySide6.QtGui import QIcon, QPixmap, QTransform
-from PySide6.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication, QFrame, QScrollArea
 
 from epidata.navigation.n_extracteur_factures import FactureNavigation
 from epidata.navigation.n_historique import HistoriqueNavigation
@@ -38,6 +38,7 @@ class Application (QObject):
         # Chargement de la fenêtre principale
         self.window = self.load_gui("mainwindow.ui")
         self.window.setWindowIcon(self.app.windowIcon())
+        self.window.setMinimumSize(960, 540)
 
         # Attribution des icônes des boutons de la sidebar
         self.setup_icons()
@@ -173,9 +174,20 @@ class Application (QObject):
         self.pages["historique"] = self.load_gui("Historique_selecteur.ui")
         self.pages["parametres"] = self.load_gui("Parametres.ui")
 
-        # Ajout de chaque page au QStackedWidget
-        for page in self.pages.values():
-            self.window.stackedWidget.addWidget(page)
+        # Les pages restent utilisables quand leur contenu dépasse la taille de la fenêtre.
+        self._stacked_pages = {}
+        for page_name, page in self.pages.items():
+            scroll_area = QScrollArea(self.window.stackedWidget)
+            scroll_area.setObjectName("appPageScrollArea")
+            scroll_area.viewport().setObjectName("appPageScrollViewport")
+            scroll_area.viewport().setAutoFillBackground(True)
+            scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+            scroll_area.setWidgetResizable(True)
+            page.setObjectName("appPageContent")
+            scroll_area.setWidget(page)
+            stacked_page = scroll_area
+            self._stacked_pages[page_name] = stacked_page
+            self.window.stackedWidget.addWidget(stacked_page)
 
     def setup_navigation(self):
         # Connexion des boutons de navigation
@@ -311,7 +323,7 @@ class Application (QObject):
                 self.derniere_page_convertisseur_pdf = page_name
 
         # Récupération de la page demandée  
-        page = self.pages[page_name]  
+        page = self._stacked_pages[page_name]
     
         # Affichage de la page  
         self.window.stackedWidget.setCurrentWidget(page)

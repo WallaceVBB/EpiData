@@ -23,7 +23,10 @@ QWidget {
 QMainWindow,
 #centralwidget,
 QStackedWidget,
-QStackedWidget > QWidget {
+QStackedWidget > QWidget,
+QScrollArea#appPageScrollArea,
+QWidget#appPageScrollViewport,
+QWidget#appPageContent {
 	background-color: #f4f7f8;
 }
 
@@ -107,6 +110,18 @@ QPushButton:pressed {
 QPushButton:disabled {
 	background-color: #c9c9c9;
 	color: #f0f0f0;
+}
+
+QPushButton[class="creation-button"] {
+	background-color: #559158;
+	color: white;
+	font-weight: 600;
+}
+QPushButton[class="creation-button"]:hover {
+	background-color: #46994a;
+}
+QPushButton[class="creation-button"]:pressed {
+	background-color: #448348;
 }
 
 /* class = card-button : gros bouton "carte" des pages de sélection */

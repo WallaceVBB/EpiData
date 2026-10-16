@@ -174,7 +174,7 @@ class FactureNavigation:
             self._lignes_methodes.extend((convertir, actions))
 
         layout.removeWidget(bouton_creation)
-        layout.addWidget(bouton_creation, len(self._methodes_personnalisees) + 2, 1)
+        layout.addWidget(bouton_creation, len(self._methodes_personnalisees) + 3, 1)
 
     def _ouvrir_creation_methode(self):
         page = self.pages.get("convertisseur_pdf_creation")
